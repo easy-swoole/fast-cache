@@ -11,6 +11,7 @@ namespace EasySwoole\FastCache;
 
 use EasySwoole\Component\Singleton;
 use EasySwoole\FastCache\Exception\RuntimeError;
+use Swoole\Coroutine\Channel;
 
 class Cache
 {
@@ -91,7 +92,7 @@ class Cache
         $com->setCommand('set');
         $com->setValue($value);
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     function get($key,float $timeout = 0.1)
@@ -102,7 +103,7 @@ class Cache
         $com = new Package();
         $com->setCommand('get');
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     function unset($key,float $timeout = 0.1)
@@ -113,7 +114,7 @@ class Cache
         $com = new Package();
         $com->setCommand('unset');
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     function keys($key = null,float $timeout = 0.1):?array
@@ -124,15 +125,18 @@ class Cache
         $com = new Package();
         $com->setCommand('keys');
         $com->setKey($key);
-        $data = [];
-        for( $i=0 ; $i < $this->processNum ; $i++){
-            $sockFile = $this->tempDir."/{$this->serverName}.FastCacheProcess.{$i}.sock";
-            $keys = $this->sendAndRecv('',$com,$timeout,$sockFile);
-            if($keys!==null){
-                $data = array_merge($data,$keys);
+        $info =  $this->broadcast($com,$timeout);
+        if(is_array($info)){
+            $ret = [];
+            foreach ($info as $item){
+                foreach ($item as $sub){
+                    $ret[] = $sub;
+                }
             }
+            return $ret;
+        }else{
+            return null;
         }
-        return $data;
     }
 
     function flush(float $timeout = 0.1)
@@ -142,10 +146,7 @@ class Cache
         }
         $com = new Package();
         $com->setCommand('flush');
-        for( $i=0 ; $i < $this->processNum ; $i++){
-            $sockFile = $this->tempDir."/{$this->serverName}.FastCacheProcess.{$i}.sock";
-            $this->sendAndRecv('',$com,$timeout,$sockFile);
-        }
+        $this->broadcast($com,$timeout);
         return true;
     }
 
@@ -158,7 +159,7 @@ class Cache
         $com->setCommand('enQueue');
         $com->setValue($value);
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     public function deQueue($key,$timeout = 0.1)
@@ -169,7 +170,7 @@ class Cache
         $com = new Package();
         $com->setCommand('deQueue');
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     public function queueSize($key,$timeout = 0.1)
@@ -180,7 +181,7 @@ class Cache
         $com = new Package();
         $com->setCommand('queueSize');
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     public function unsetQueue($key,$timeout = 0.1):?bool
@@ -191,7 +192,7 @@ class Cache
         $com = new Package();
         $com->setCommand('unsetQueue');
         $com->setKey($key);
-        return $this->sendAndRecv($key,$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
     /*
@@ -204,15 +205,18 @@ class Cache
         }
         $com = new Package();
         $com->setCommand('queueList');
-        $data = [];
-        for( $i=0 ; $i < $this->processNum ; $i++){
-            $sockFile = $this->tempDir."/{$this->serverName}.FastCacheProcess.{$i}.sock";
-            $keys = $this->sendAndRecv('',$com,$timeout,$sockFile);
-            if($keys!==null){
-                $data = array_merge($data,$keys);
+        $info =  $this->broadcast($com,$timeout);
+        if(is_array($info)){
+            $ret = [];
+            foreach ($info as $item){
+                foreach ($item as $sub){
+                    $ret[] = $sub;
+                }
             }
+            return $ret;
+        }else{
+            return null;
         }
-        return $data;
     }
 
     function flushQueue(float $timeout = 0.1):bool
@@ -222,10 +226,7 @@ class Cache
         }
         $com = new Package();
         $com->setCommand('flushQueue');
-        for( $i=0 ; $i < $this->processNum ; $i++){
-            $sockFile = $this->tempDir."/{$this->serverName}.FastCacheProcess.{$i}.sock";
-            $this->sendAndRecv('',$com,$timeout,$sockFile);
-        }
+        $this->broadcast($com);
         return true;
     }
 
@@ -262,14 +263,16 @@ class Cache
         $list = explode('.',$key);
         $key = array_shift($list);
         $index = base_convert( substr(md5( $key),0,2), 16, 10 )%$this->processNum;
+        return $this->generateSocketByIndex($index);
+    }
+
+    private function generateSocketByIndex($index)
+    {
         return $this->tempDir."/{$this->serverName}.FastCacheProcess.{$index}.sock";
     }
 
-    private function sendAndRecv($key,Package $package,$timeout,$socketFile = null)
+    private function sendAndRecv($socketFile,Package $package,$timeout)
     {
-        if(empty($socketFile)){
-            $socketFile = $this->generateSocket($key);
-        }
         $client = new UnixClient($socketFile);
         $client->send(serialize($package));
         $ret =  $client->recv($timeout);
@@ -280,6 +283,31 @@ class Cache
             }
         }
         return null;
+    }
+
+    private function broadcast(Package $command,$timeout = 0.1)
+    {
+        $info = [];
+        $channel = new Channel($this->processNum+1);
+        for ($i = 0;$i < $this->processNum;$i++){
+            go(function ()use($command,$channel,$i,$timeout){
+                $ret = $this->sendAndRecv($this->generateSocketByIndex($i),$command,$timeout);
+                $channel->push([
+                    $i => $ret
+                ]);
+            });
+        }
+        $start = microtime(true);
+        while (1){
+            if(microtime(true) - $start > $timeout){
+                break;
+            }
+            $temp = $channel->pop($timeout);
+            if(is_array($temp)){
+                $info += $temp;
+            }
+        }
+        return $info;
     }
 
     private function modifyCheck()

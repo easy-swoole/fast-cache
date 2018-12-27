@@ -12,7 +12,10 @@
     }
   ],
   "require": {
-    "php": ">=7.1.0"
+    "php": ">=7.1.0",
+    "easyswoole/component": "^1.4",
+    "easyswoole/swoole-ide-helper": "^1.2",
+    "easyswoole/spl": "^1.1"
   },
   "autoload": {
     "psr-4": {

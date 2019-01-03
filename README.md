@@ -46,3 +46,7 @@ go(function (){
     var_dump(Cache::getInstance()->get('a'));
 });
 ```
+
+## 内存问题
+
+Actor数据分散在进程内，一个进程可能需要占用很大的内存，因此请根据实际业务量配置内存大小。

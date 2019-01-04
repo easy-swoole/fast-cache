@@ -130,7 +130,9 @@ class Cache
             $ret = [];
             foreach ($info as $item){
                 foreach ($item as $sub){
-                    $ret[] = $sub;
+                    if(is_array($sub)){
+                        $ret += $sub;
+                    }
                 }
             }
             return $ret;
@@ -210,7 +212,9 @@ class Cache
             $ret = [];
             foreach ($info as $item){
                 foreach ($item as $sub){
-                    $ret[] = $sub;
+                    if(is_array($sub)){
+                        $ret += $sub;
+                    }
                 }
             }
             return $ret;

@@ -305,6 +305,9 @@ class Cache
             $temp = $channel->pop($timeout);
             if(is_array($temp)){
                 $info += $temp;
+                if(count($temp) == $this->processNum){
+                    break;
+                }
             }
         }
         return $info;

@@ -17,6 +17,7 @@ class ProcessConfig
     private $tickInterval = 5*1000;
     private $onStart;
     private $onShutdown;
+    private $backlog;
 
     /**
      * @return mixed
@@ -114,4 +115,19 @@ class ProcessConfig
         $this->onShutdown = $onShutdown;
     }
 
+    /**
+     * @return int
+     */
+    public function getBacklog(): int
+    {
+        return $this->backlog;
+    }
+
+    /**
+     * @param int $backlog
+     */
+    public function setBacklog(int $backlog): void
+    {
+        $this->backlog = $backlog;
+    }
 }

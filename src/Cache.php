@@ -25,6 +25,7 @@ class Cache
     private $onShutdown;
     private $processNum = 3;
     private $run = false;
+    private $backlog = 256;
 
     function __construct()
     {
@@ -42,6 +43,15 @@ class Cache
     {
         $this->modifyCheck();
         $this->processNum = $num;
+        return $this;
+    }
+
+    public function setBacklog(?int $backlog = null)
+    {
+        $this->modifyCheck();
+        if($backlog != null){
+            $this->backlog = $backlog;
+        }
         return $this;
     }
 
@@ -256,6 +266,7 @@ class Cache
             $config->setOnTick($this->onTick);
             $config->setTickInterval($this->tickInterval);
             $config->setTempDir($this->tempDir);
+            $config->setBacklog($this->backlog);
             $ret[] = new CacheProcess($config->getProcessName(),$config);
         }
         return $ret;

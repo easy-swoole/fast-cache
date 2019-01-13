@@ -87,7 +87,7 @@ class CacheProcess extends AbstractProcess
             {
                 unlink($sockFile);
             }
-            $socketServer = new Socket(AF_UNIX,SOCK_STREAM);
+            $socketServer = new Socket(AF_UNIX,SOCK_STREAM,0);
             $socketServer->bind($sockFile);
             if(!$socketServer->listen($processConfig->getBacklog())){
                 trigger_error('listen '.$sockFile. ' fail');

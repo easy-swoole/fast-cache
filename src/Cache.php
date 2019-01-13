@@ -139,9 +139,9 @@ class Cache
         if(is_array($info)){
             $ret = [];
             foreach ($info as $item){
-                foreach ($item as $sub){
-                    if(is_array($sub)){
-                        $ret += $sub;
+                if(is_array($item)){
+                    foreach ($item as $sub){
+                        $ret[] = $sub;
                     }
                 }
             }
@@ -221,9 +221,9 @@ class Cache
         if(is_array($info)){
             $ret = [];
             foreach ($info as $item){
-                foreach ($item as $sub){
-                    if(is_array($sub)){
-                        $ret += $sub;
+                if(is_array($item)){
+                    foreach ($item as $sub){
+                        $ret[] = $sub;
                     }
                 }
             }

@@ -11,6 +11,7 @@ namespace EasySwoole\FastCache;
 
 use EasySwoole\Component\Process\AbstractProcess;
 use EasySwoole\Spl\SplArray;
+use Swoole\Coroutine\Socket;
 
 class CacheProcess extends AbstractProcess
 {
@@ -86,24 +87,22 @@ class CacheProcess extends AbstractProcess
             {
                 unlink($sockFile);
             }
-            $ctx = stream_context_create(['socket' => ['so_reuseaddr' => true, 'backlog' => $processConfig->getBacklog()]]);
-            $socket = stream_socket_server("unix://$sockFile", $errno, $errStr,STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,$ctx);
-            if (!$socket)
-            {
-                trigger_error($errStr);
+            $socketServer = new Socket(AF_UNIX,SOCK_STREAM);
+            $socketServer->bind($sockFile);
+            if(!$socketServer->listen($processConfig->getBacklog())){
+                trigger_error('listen '.$sockFile. ' fail');
                 return;
             }
             while (1){
-                $conn = stream_socket_accept($socket,-1);
+                $conn = $socketServer->accept(-1);
                 if($conn){
                     go(function ()use($conn){
                         $com = new Package();
-                        stream_set_timeout($conn,2);
                         //先取4个字节的头
-                        $header = fread($conn,4);
+                        $header = $conn->recv(4,1);
                         if(strlen($header) == 4){
                             $allLength = Protocol::packDataLength($header);
-                            $data = fread($conn,$allLength );
+                            $data = $conn->recv($allLength,1);
                             if(strlen($data) == $allLength){
                                 //开始数据包+命令处理，并返回数据
                                 $fromPackage = unserialize($data);
@@ -181,8 +180,8 @@ class CacheProcess extends AbstractProcess
                                 }
                             }
                         }
-                        fwrite($conn,Protocol::pack(serialize($com)));
-                        fclose($conn);
+                        $conn->send(Protocol::pack(serialize($com)));
+                        $conn->close();
                     });
                 }
             }

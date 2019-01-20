@@ -93,7 +93,7 @@ class Cache
         return $this;
     }
 
-    function set($key,$value,float $timeout = 0.1)
+    function set($key,$value,float $timeout = 1.0)
     {
         if($this->processNum <= 0){
             return false;
@@ -105,7 +105,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    function get($key,float $timeout = 0.1)
+    function get($key,float $timeout = 1.0)
     {
         if($this->processNum <= 0){
             return null;
@@ -116,7 +116,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    function unset($key,float $timeout = 0.1)
+    function unset($key,float $timeout = 1.0)
     {
         if($this->processNum <= 0){
             return false;
@@ -127,7 +127,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    function keys($key = null,float $timeout = 0.1):?array
+    function keys($key = null,float $timeout = 1.0):?array
     {
         if($this->processNum <= 0){
             return [];
@@ -151,7 +151,7 @@ class Cache
         }
     }
 
-    function flush(float $timeout = 0.1)
+    function flush(float $timeout = 1.0)
     {
         if($this->processNum <= 0){
             return false;
@@ -162,7 +162,7 @@ class Cache
         return true;
     }
 
-    public function enQueue($key,$value,$timeout = 0.1)
+    public function enQueue($key,$value,$timeout = 1.0)
     {
         if($this->processNum <= 0){
             return false;
@@ -174,7 +174,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    public function deQueue($key,$timeout = 0.1)
+    public function deQueue($key,$timeout = 1.0)
     {
         if($this->processNum <= 0){
             return null;
@@ -185,7 +185,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    public function queueSize($key,$timeout = 0.1)
+    public function queueSize($key,$timeout = 1.0)
     {
         if($this->processNum <= 0){
             return null;
@@ -196,7 +196,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
     }
 
-    public function unsetQueue($key,$timeout = 0.1):?bool
+    public function unsetQueue($key,$timeout = 1.0):?bool
     {
         if($this->processNum <= 0){
             return false;
@@ -210,7 +210,7 @@ class Cache
     /*
      * 返回当前队列的全部key名称
      */
-    public function queueList($timeout = 0.1):?array
+    public function queueList($timeout = 1.0):?array
     {
         if($this->processNum <= 0){
             return [];
@@ -233,14 +233,14 @@ class Cache
         }
     }
 
-    function flushQueue(float $timeout = 0.1):bool
+    function flushQueue(float $timeout = 1.0):bool
     {
         if($this->processNum <= 0){
             return false;
         }
         $com = new Package();
         $com->setCommand('flushQueue');
-        $this->broadcast($com);
+        $this->broadcast($com,$timeout);
         return true;
     }
 

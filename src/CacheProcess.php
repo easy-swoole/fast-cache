@@ -180,7 +180,13 @@ class CacheProcess extends AbstractProcess
                                 }
                             }
                         }
-                        $conn->send(Protocol::pack(serialize($com)));
+                        $string = Protocol::pack(serialize($com));
+                        for ($written = 0; $written < strlen($string); $written += $fwrite) {
+                            $fwrite = $conn->send(substr($string, $written));
+                            if ($fwrite === false) {
+                                break;
+                            }
+                        }
                         $conn->close();
                     });
                 }

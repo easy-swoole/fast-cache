@@ -102,7 +102,18 @@ class CacheProcess extends AbstractProcess
                         $header = $conn->recv(4,1);
                         if(strlen($header) == 4){
                             $allLength = Protocol::packDataLength($header);
-                            $data = $conn->recv($allLength,1);
+                            $recvLeft = $allLength;
+                            $data = '';
+                            $tryTimes = 10;
+                            while ($recvLeft > 0 && $tryTimes > 0){
+                                $temp = $conn->recv($allLength,1);
+                                if($temp === false){
+                                    break;
+                                }
+                                $data = $data.$temp;
+                                $recvLeft = $recvLeft - strlen($temp);
+                                $tryTimes--;
+                            }
                             if(strlen($data) == $allLength){
                                 //开始数据包+命令处理，并返回数据
                                 $fromPackage = unserialize($data);

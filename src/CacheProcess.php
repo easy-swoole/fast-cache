@@ -8,38 +8,112 @@
 
 namespace EasySwoole\FastCache;
 
-
-use EasySwoole\Component\Process\AbstractProcess;
+use EasySwoole\Component\Process\Exception;
+use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
 use EasySwoole\Spl\SplArray;
+use EasySwoole\Utility\Random;
+use SplQueue;
 use Swoole\Coroutine\Socket;
+use Swoole\Process;
+use Throwable;
 
-class CacheProcess extends AbstractProcess
+class CacheProcess extends AbstractUnixProcess
 {
-    /** @var $config CacheProcessConfig */
+    /**
+     * 进程配置
+     * @var CacheProcessConfig
+     */
     private $config;
-    /*
-     * @var $splArray SplArray
+
+    /**
+     * Spl数组存放当前的缓存内容
+     * @var SplArray
      */
     protected $splArray;
+
+    /**
+     * 存放Spl队列
+     * @var array
+     */
     protected $queueArray = [];
 
     /**
-     * @return mixed
+     * 带有过期时间的Key
+     * @var array
      */
-    public function getSplArray()
+    protected $ttlKeys = [];
+
+    /**
+     * 进程初始化并开始监听Socket
+     * @param $args
+     * @throws Exception
+     */
+    public function run($args)
     {
-        return $this->splArray;
+        /** @var $processConfig CacheProcessConfig */
+        $processConfig = $this->getConfig();
+        $this->splArray = new SplArray();
+
+        // 进程启动时执行
+        if (is_callable($processConfig->getOnStart())) {
+            try {
+                call_user_func($processConfig->getOnStart(), $this);
+            } catch (Throwable $throwable) {
+                $this->onException($throwable);
+            }
+        }
+
+        // 设定落地时间定时器
+        if (is_callable($processConfig->getOnTick())) {
+            $this->addTick($processConfig->getTickInterval(), function () use ($processConfig) {
+                try {
+                    call_user_func($processConfig->getOnTick(), $this);
+                } catch (Throwable $throwable) {
+                    $this->onException($throwable);
+                }
+            });
+        }
+
+        // 过期Key自动回收(至少499ms执行一次保证1秒内执行2次过期判断)
+        $this->addTick(499, function () use ($processConfig) {
+            try {
+                if (!empty($this->ttlKeys)) {
+                    mt_srand();
+                    $keys = array_keys($this->ttlKeys);
+                    shuffle($keys);
+                    $checkKeys = array_slice($keys, 0, 100);  // 每次随机检查100个过期
+                    if (is_array($checkKeys) && count($checkKeys) > 0) {
+                        foreach ($checkKeys as $ttlKey) {
+                            $ttlExpire = $this->ttlKeys[$ttlKey];
+                            if ($ttlExpire < time()) {
+                                unset($this->ttlKeys[$ttlKey], $this->splArray[$ttlKey]);
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $throwable) {
+                $this->onException($throwable);
+            }
+        });
+
+        parent::run($processConfig);
     }
 
     /**
-     * @param mixed $splArray
+     * 初始化Spl队列池
+     * @param $key
+     * @return SplQueue
      */
-    public function setSplArray($splArray): void
+    private function initQueue($key): SplQueue
     {
-        $this->splArray = $splArray;
+        if (!isset($this->queueArray[$key])) {
+            $this->queueArray[$key] = new SplQueue();
+        }
+        return $this->queueArray[$key];
     }
 
     /**
+     * 获取当前Spl队列池
      * @return array
      */
     public function getQueueArray(): array
@@ -48,6 +122,7 @@ class CacheProcess extends AbstractProcess
     }
 
     /**
+     * 设置当前Spl队列池
      * @param array $queueArray
      */
     public function setQueueArray(array $queueArray): void
@@ -55,188 +130,246 @@ class CacheProcess extends AbstractProcess
         $this->queueArray = $queueArray;
     }
 
-    public function run($processConfig)
+    /**
+     * 获取当前Spl数组
+     * @return mixed
+     */
+    public function getSplArray()
     {
-        // TODO: Implement run() method.
-        /** @var $processConfig CacheProcessConfig */
-        $this->config = $processConfig;
-
-        $this->splArray = new SplArray();
-        if (is_callable($processConfig->getOnStart())) {
-            try {
-                call_user_func($processConfig->getOnStart(), $this);
-            } catch (\Throwable $throwable) {
-                $this->onException($throwable);
-            }
-        }
-        if (is_callable($processConfig->getOnTick())) {
-            $this->addTick($processConfig->getTickInterval(), function () use ($processConfig) {
-                try {
-                    call_user_func($processConfig->getOnTick(), $this);
-                } catch (\Throwable $throwable) {
-                    $this->onException($throwable);
-                }
-            });
-        }
-
-        \Swoole\Runtime::enableCoroutine(true);
-        // TODO: Implement run() method.
-        go(function () use ($processConfig) {
-            $sockFile = $processConfig->getTempDir() . "/{$this->getProcessName()}.sock";
-            if (file_exists($sockFile)) {
-                unlink($sockFile);
-            }
-            $socketServer = new Socket(AF_UNIX, SOCK_STREAM, 0);
-            $socketServer->bind($sockFile);
-            if (!$socketServer->listen($processConfig->getBacklog())) {
-                trigger_error('listen ' . $sockFile . ' fail');
-                return;
-            }
-            while (1) {
-                $conn = $socketServer->accept(-1);
-                if ($conn) {
-                    go(function () use ($conn) {
-                        $com = new Package();
-                        //先取4个字节的头
-                        $header = $conn->recv(4, 1);
-                        if (strlen($header) == 4) {
-                            $allLength = Protocol::packDataLength($header);
-                            $recvLeft = $allLength;
-                            $data = '';
-                            $tryTimes = 10;
-                            while ($recvLeft > 0 && $tryTimes > 0) {
-                                $temp = $conn->recv($allLength, 1);
-                                if ($temp === false) {
-                                    break;
-                                }
-                                $data = $data . $temp;
-                                $recvLeft = $recvLeft - strlen($temp);
-                                $tryTimes--;
-                            }
-                            if (strlen($data) == $allLength) {
-                                //开始数据包+命令处理，并返回数据
-                                $fromPackage = unserialize($data);
-                                if ($fromPackage instanceof Package) {
-                                    switch ($fromPackage->getCommand()) {
-                                        case 'set':
-                                            {
-                                                $com->setValue(true);
-                                                $this->splArray->set($fromPackage->getKey(), $fromPackage->getValue());
-                                                break;
-                                            }
-                                        case 'get':
-                                            {
-                                                $com->setValue($this->splArray->get($fromPackage->getKey()));
-                                                break;
-                                            }
-                                        case 'unset':
-                                            {
-                                                $com->setValue(true);
-                                                $this->splArray->unset($fromPackage->getKey());
-                                                break;
-                                            }
-                                        case 'keys':
-                                            {
-                                                $key = $fromPackage->getKey();
-                                                $com->setValue($this->splArray->keys($key));
-                                                break;
-                                            }
-                                        case 'flush':
-                                            {
-                                                $com->setValue(true);
-                                                $this->splArray = new SplArray();
-                                                break;
-                                            }
-                                        case 'enQueue':
-                                            {
-                                                $que = $this->initQueue($fromPackage->getKey());
-                                                $data = $fromPackage->getValue();
-                                                if ($data !== null) {
-                                                    $que->enqueue($fromPackage->getValue());
-                                                    $com->setValue(true);
-                                                } else {
-                                                    $com->setValue(false);
-                                                }
-                                                break;
-                                            }
-                                        case 'deQueue':
-                                            {
-                                                $que = $this->initQueue($fromPackage->getKey());
-                                                if ($que->isEmpty()) {
-                                                    $com->setValue(null);
-                                                } else {
-                                                    $com->setValue($que->dequeue());
-                                                }
-                                                break;
-                                            }
-                                        case 'queueSize':
-                                            {
-                                                $que = $this->initQueue($fromPackage->getKey());
-                                                $com->setValue($que->count());
-                                                break;
-                                            }
-                                        case 'unsetQueue':
-                                            {
-                                                if (isset($this->queueArray[$fromPackage->getKey()])) {
-                                                    unset($this->queueArray[$fromPackage->getKey()]);
-                                                    $com->setValue(true);
-                                                } else {
-                                                    $com->setValue(false);
-                                                }
-                                                break;
-                                            }
-                                        case 'queueList':
-                                            {
-                                                $com->setValue(array_keys($this->queueArray));
-                                                break;
-                                            }
-                                        case 'flushQueue':
-                                            {
-                                                $this->queueArray = [];
-                                                $com->setValue(true);
-                                                break;
-                                            }
-                                    }
-                                }
-                            }
-                        }
-                        $string = Protocol::pack(serialize($com));
-                        for ($written = 0; $written < strlen($string); $written += $fwrite) {
-                            $fwrite = $conn->send(substr($string, $written));
-                            if ($fwrite === false) {
-                                break;
-                            }
-                        }
-                        $conn->close();
-                    });
-                }
-            }
-        });
+        return $this->splArray;
     }
 
-    private function initQueue($key): \SplQueue
+    /**
+     * 设置当前Spl数组
+     * @param mixed $splArray
+     */
+    public function setSplArray($splArray): void
     {
-        if (!isset($this->queueArray[$key])) {
-            $this->queueArray[$key] = new \SplQueue();
-        }
-        return $this->queueArray[$key];
+        $this->splArray = $splArray;
     }
 
+    /**
+     * 进程退出时落地数据
+     * @return void
+     */
     public function onShutDown()
     {
-        // TODO: Implement onShutDown() method.
         $onShutdown = $this->config->getOnShutdown();
         if (is_callable($onShutdown)) {
             try {
                 call_user_func($onShutdown, $this);
-            } catch (\Throwable $throwable) {
+            } catch (Throwable $throwable) {
                 $this->onException($throwable);
             }
         }
     }
 
-    public function onReceive(string $str)
+    /**
+     * UnixClientAccept
+     * @param Socket $socket
+     */
+    public function onAccept(Socket $socket)
     {
-        // TODO: Implement onReceive() method.
+        // 收取包头4字节计算包长度 收不到4字节包头丢弃该包
+        $header = $socket->recvAll(4, 1);
+        if (strlen($header) != 4) {
+            $socket->close();
+            return;
+        }
+
+        // 收包头声明的包长度 包长一致进入命令处理流程
+        $allLength = Protocol::packDataLength($header);
+        $data = $socket->recvAll($allLength, 1);
+        if (strlen($data) == $allLength) {
+            $replyPackage = $this->executeCommand($data);
+            $socket->sendAll(Protocol::pack(serialize($replyPackage)));
+            $socket->close();
+        }
+
+        // 否则丢弃该包不进行处理
+        $socket->close();
+        return;
+    }
+
+    /**
+     * 进程收到消息
+     * @param Process $process
+     */
+    protected function onPipeReadable(Process $process)
+    {
+
+    }
+
+    /**
+     * 异常处理
+     * @param Throwable $throwable
+     * @param mixed ...$args
+     */
+    protected function onException(Throwable $throwable, ...$args)
+    {
+        trigger_error("{$throwable->getMessage()} at file:{$throwable->getFile()} line:{$throwable->getLine()}");
+    }
+
+    /**
+     * 执行命令
+     * @param $commandPayload
+     * @return Package
+     */
+    protected function executeCommand(?string $commandPayload): Package
+    {
+        $replyPackage = new Package();
+        $fromPackage = unserialize($commandPayload);
+        if ($fromPackage instanceof Package) { // 进入业务处理流程
+            switch ($fromPackage->getCommand()) {
+                case 'set':
+                    {
+                        $replyPackage->setValue(true);
+                        $key = $fromPackage->getKey();
+                        $value = $fromPackage->getValue();
+
+                        // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
+                        $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
+                        if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
+                            if (!is_null($ttl)) {
+                                $this->ttlKeys[$key] = time() + $ttl;
+                            }
+                        }
+
+                        $this->splArray->set($key, $value);
+                        break;
+                    }
+                case 'get':
+                    {
+                        $key = $fromPackage->getKey();
+
+                        // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
+                        if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
+                            unset($this->ttlKeys[$key]);
+                            $this->splArray->unset($key);
+                            $replyPackage->setValue(null);
+                        } else {
+                            $replyPackage->setValue($this->splArray->get($fromPackage->getKey()));
+                        }
+
+                        break;
+                    }
+                case 'unset':
+                    {
+                        $replyPackage->setValue(true);
+                        unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
+                        $this->splArray->unset($fromPackage->getKey());
+                        break;
+                    }
+                case 'keys':
+                    {
+                        $key = $fromPackage->getKey();
+                        $keys = $this->splArray->keys($key);
+                        $time = time();
+                        foreach ($this->ttlKeys as $ttlKey => $ttl) {
+                            if ($ttl < $time) {
+                                unset($keys[$ttlKey], $this->ttlKeys[$ttlKey]);  // 立刻释放过期的ttlKey
+                            }
+                        }
+                        $replyPackage->setValue($this->splArray->keys($key));
+                        break;
+                    }
+                case 'flush':
+                    {
+                        $replyPackage->setValue(true);
+                        $this->ttlKeys = [];  // 同时移除全部TTL时间
+                        $this->splArray = new SplArray();
+                        break;
+                    }
+                case 'expire':
+                    {
+                        $replyPackage->setValue(false);
+                        $key = $fromPackage->getKey();
+                        $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
+                        var_dump($ttl);
+
+                        // 不能给当前没有的Key设置TTL
+                        if (array_key_exists($key, $this->splArray)) {
+                            if (!is_null($ttl)) {
+                                $this->ttlKeys[$key] = time() + $ttl;
+                                $replyPackage->setValue(true);
+                            }
+                        }
+
+                        break;
+                    }
+                case 'persist':
+                    {
+                        $replyPackage->setValue(true);
+                        $key = $fromPackage->getKey();
+                        unset($this->ttlKeys[$key]);
+                        break;
+                    }
+                case 'ttl':
+                    {
+                        $replyPackage->setValue(null);
+                        $key = $fromPackage->getKey();
+                        $time = time();
+
+                        // 不能查询当前没有的Key
+                        if (array_key_exists($key, $this->splArray) && array_key_exists($key, $this->ttlKeys)) {
+                            $expire = $this->ttlKeys[$key];
+                            if ($expire > $time) {  // 有剩余时间时才会返回剩余ttl 否则返回null表示已经过期或未设置 不区分主动过期和key不存在的情况
+                                $replyPackage->setValue($expire - $time);
+                            }
+                        }
+                        break;
+                    }
+                case 'enQueue':
+                    {
+                        $que = $this->initQueue($fromPackage->getKey());
+                        $data = $fromPackage->getValue();
+                        if ($data !== null) {
+                            $que->enqueue($fromPackage->getValue());
+                            $replyPackage->setValue(true);
+                        } else {
+                            $replyPackage->setValue(false);
+                        }
+                        break;
+                    }
+                case 'deQueue':
+                    {
+                        $que = $this->initQueue($fromPackage->getKey());
+                        if ($que->isEmpty()) {
+                            $replyPackage->setValue(null);
+                        } else {
+                            $replyPackage->setValue($que->dequeue());
+                        }
+                        break;
+                    }
+                case 'queueSize':
+                    {
+                        $que = $this->initQueue($fromPackage->getKey());
+                        $replyPackage->setValue($que->count());
+                        break;
+                    }
+                case 'unsetQueue':
+                    {
+                        if (isset($this->queueArray[$fromPackage->getKey()])) {
+                            unset($this->queueArray[$fromPackage->getKey()]);
+                            $replyPackage->setValue(true);
+                        } else {
+                            $replyPackage->setValue(false);
+                        }
+                        break;
+                    }
+                case 'queueList':
+                    {
+                        $replyPackage->setValue(array_keys($this->queueArray));
+                        break;
+                    }
+                case 'flushQueue':
+                    {
+                        $this->queueArray = [];
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+            }
+        }
+        return $replyPackage;
     }
 }

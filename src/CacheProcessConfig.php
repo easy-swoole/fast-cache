@@ -8,15 +8,16 @@
 
 namespace EasySwoole\FastCache;
 
-class CacheProcessConfig
+use EasySwoole\Component\Process\Socket\UnixProcessConfig;
+
+class CacheProcessConfig extends UnixProcessConfig
 {
-    private $tempDir;
-    private $processName;
-    private $onTick;
-    private $tickInterval = 5 * 1000;
-    private $onStart;
-    private $onShutdown;
-    private $backlog;
+    protected $tempDir;
+    protected $onTick;
+    protected $tickInterval = 5 * 1000;
+    protected $onStart;
+    protected $onShutdown;
+    protected $backlog;
 
     /**
      * @return mixed

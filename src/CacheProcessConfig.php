@@ -8,13 +8,12 @@
 
 namespace EasySwoole\FastCache;
 
-
-class ProcessConfig
+class CacheProcessConfig
 {
     private $tempDir;
     private $processName;
     private $onTick;
-    private $tickInterval = 5*1000;
+    private $tickInterval = 5 * 1000;
     private $onStart;
     private $onShutdown;
     private $backlog;

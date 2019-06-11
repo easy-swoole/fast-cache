@@ -8,7 +8,6 @@
 
 namespace EasySwoole\FastCache;
 
-
 use EasySwoole\Component\Singleton;
 use EasySwoole\FastCache\Exception\RuntimeError;
 use Swoole\Coroutine\Channel;
@@ -20,7 +19,7 @@ class Cache
     private $tempDir;
     private $serverName = 'EasySwoole';
     private $onTick;
-    private $tickInterval = 5*1000;
+    private $tickInterval = 5 * 1000;
     private $onStart;
     private $onShutdown;
     private $processNum = 3;
@@ -39,7 +38,7 @@ class Cache
         return $this;
     }
 
-    public function setProcessNum(int $num):Cache
+    public function setProcessNum(int $num): Cache
     {
         $this->modifyCheck();
         $this->processNum = $num;
@@ -49,7 +48,7 @@ class Cache
     public function setBacklog(?int $backlog = null)
     {
         $this->modifyCheck();
-        if($backlog != null){
+        if ($backlog != null) {
             $this->backlog = $backlog;
         }
         return $this;
@@ -93,173 +92,173 @@ class Cache
         return $this;
     }
 
-    function set($key,$value,float $timeout = 1.0)
+    function set($key, $value, float $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('set');
         $com->setValue($value);
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    function get($key,float $timeout = 1.0)
+    function get($key, float $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return null;
         }
         $com = new Package();
         $com->setCommand('get');
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    function unset($key,float $timeout = 1.0)
+    function unset($key, float $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('unset');
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    function keys($key = null,float $timeout = 1.0):?array
+    function keys($key = null, float $timeout = 1.0): ?array
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return [];
         }
         $com = new Package();
         $com->setCommand('keys');
         $com->setKey($key);
-        $info =  $this->broadcast($com,$timeout);
-        if(is_array($info)){
+        $info = $this->broadcast($com, $timeout);
+        if (is_array($info)) {
             $ret = [];
-            foreach ($info as $item){
-                if(is_array($item)){
-                    foreach ($item as $sub){
+            foreach ($info as $item) {
+                if (is_array($item)) {
+                    foreach ($item as $sub) {
                         $ret[] = $sub;
                     }
                 }
             }
             return $ret;
-        }else{
+        } else {
             return null;
         }
     }
 
     function flush(float $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('flush');
-        $this->broadcast($com,$timeout);
+        $this->broadcast($com, $timeout);
         return true;
     }
 
-    public function enQueue($key,$value,$timeout = 1.0)
+    public function enQueue($key, $value, $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('enQueue');
         $com->setValue($value);
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    public function deQueue($key,$timeout = 1.0)
+    public function deQueue($key, $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return null;
         }
         $com = new Package();
         $com->setCommand('deQueue');
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    public function queueSize($key,$timeout = 1.0)
+    public function queueSize($key, $timeout = 1.0)
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return null;
         }
         $com = new Package();
         $com->setCommand('queueSize');
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
-    public function unsetQueue($key,$timeout = 1.0):?bool
+    public function unsetQueue($key, $timeout = 1.0): ?bool
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('unsetQueue');
         $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key),$com,$timeout);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
     /*
      * 返回当前队列的全部key名称
      */
-    public function queueList($timeout = 1.0):?array
+    public function queueList($timeout = 1.0): ?array
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return [];
         }
         $com = new Package();
         $com->setCommand('queueList');
-        $info =  $this->broadcast($com,$timeout);
-        if(is_array($info)){
+        $info = $this->broadcast($com, $timeout);
+        if (is_array($info)) {
             $ret = [];
-            foreach ($info as $item){
-                if(is_array($item)){
-                    foreach ($item as $sub){
+            foreach ($info as $item) {
+                if (is_array($item)) {
+                    foreach ($item as $sub) {
                         $ret[] = $sub;
                     }
                 }
             }
             return $ret;
-        }else{
+        } else {
             return null;
         }
     }
 
-    function flushQueue(float $timeout = 1.0):bool
+    function flushQueue(float $timeout = 1.0): bool
     {
-        if($this->processNum <= 0){
+        if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand('flushQueue');
-        $this->broadcast($com,$timeout);
+        $this->broadcast($com, $timeout);
         return true;
     }
 
     function attachToServer(\swoole_server $server)
     {
         $list = $this->initProcess();
-        foreach ($list as $process){
+        foreach ($list as $process) {
             /** @var $proces CacheProcess */
             $server->addProcess($process->getProcess());
         }
     }
 
-    public function initProcess():array
+    public function initProcess(): array
     {
         $this->run = true;
         $ret = [];
         $name = "{$this->serverName}.FastCacheProcess";
-        for($i = 0;$i < $this->processNum;$i++){
-            $config = new ProcessConfig();
+        for ($i = 0; $i < $this->processNum; $i++) {
+            $config = new CacheProcessConfig();
             $config->setProcessName("{$name}.{$i}");
             $config->setOnStart($this->onStart);
             $config->setOnShutdown($this->onShutdown);
@@ -267,60 +266,60 @@ class Cache
             $config->setTickInterval($this->tickInterval);
             $config->setTempDir($this->tempDir);
             $config->setBacklog($this->backlog);
-            $ret[] = new CacheProcess($config->getProcessName(),$config);
+            $ret[] = new CacheProcess($config->getProcessName(), $config);
         }
         return $ret;
     }
 
-    private function generateSocket($key):string
+    private function generateSocket($key): string
     {
         //当以多维路径作为key的时候，以第一个路径为主。
-        $list = explode('.',$key);
+        $list = explode('.', $key);
         $key = array_shift($list);
-        $index = base_convert( substr(md5( $key),0,2), 16, 10 )%$this->processNum;
+        $index = base_convert(substr(md5($key), 0, 2), 16, 10) % $this->processNum;
         return $this->generateSocketByIndex($index);
     }
 
     private function generateSocketByIndex($index)
     {
-        return $this->tempDir."/{$this->serverName}.FastCacheProcess.{$index}.sock";
+        return $this->tempDir . "/{$this->serverName}.FastCacheProcess.{$index}.sock";
     }
 
-    private function sendAndRecv($socketFile,Package $package,$timeout)
+    private function sendAndRecv($socketFile, Package $package, $timeout)
     {
         $client = new UnixClient($socketFile);
         $client->send(serialize($package));
-        $ret =  $client->recv($timeout);
-        if(!empty($ret)){
+        $ret = $client->recv($timeout);
+        if (!empty($ret)) {
             $ret = unserialize($ret);
-            if($ret instanceof Package){
+            if ($ret instanceof Package) {
                 return $ret->getValue();
             }
         }
         return null;
     }
 
-    private function broadcast(Package $command,$timeout = 0.1)
+    private function broadcast(Package $command, $timeout = 0.1)
     {
         $info = [];
-        $channel = new Channel($this->processNum+1);
-        for ($i = 0;$i < $this->processNum;$i++){
-            go(function ()use($command,$channel,$i,$timeout){
-                $ret = $this->sendAndRecv($this->generateSocketByIndex($i),$command,$timeout);
+        $channel = new Channel($this->processNum + 1);
+        for ($i = 0; $i < $this->processNum; $i++) {
+            go(function () use ($command, $channel, $i, $timeout) {
+                $ret = $this->sendAndRecv($this->generateSocketByIndex($i), $command, $timeout);
                 $channel->push([
                     $i => $ret
                 ]);
             });
         }
         $start = microtime(true);
-        while (1){
-            if(microtime(true) - $start > $timeout){
+        while (1) {
+            if (microtime(true) - $start > $timeout) {
                 break;
             }
             $temp = $channel->pop($timeout);
-            if(is_array($temp)){
+            if (is_array($temp)) {
                 $info += $temp;
-                if(count($info) == $this->processNum){
+                if (count($info) == $this->processNum) {
                     break;
                 }
             }
@@ -330,7 +329,7 @@ class Cache
 
     private function modifyCheck()
     {
-        if($this->run){
+        if ($this->run) {
             throw new RuntimeError('you can not modify configure after init process check');
         }
     }

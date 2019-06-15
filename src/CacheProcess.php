@@ -11,7 +11,6 @@ namespace EasySwoole\FastCache;
 use EasySwoole\Component\Process\Exception;
 use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
 use EasySwoole\Spl\SplArray;
-use EasySwoole\Utility\Random;
 use SplQueue;
 use Swoole\Coroutine\Socket;
 use Swoole\Process;

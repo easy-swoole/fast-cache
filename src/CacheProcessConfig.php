@@ -18,6 +18,7 @@ class CacheProcessConfig extends UnixProcessConfig
     protected $onStart;
     protected $onShutdown;
     protected $backlog;
+    protected $workerIndex;
 
     /**
      * @return mixed
@@ -129,5 +130,21 @@ class CacheProcessConfig extends UnixProcessConfig
     public function setBacklog(int $backlog): void
     {
         $this->backlog = $backlog;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getWorkerIndex()
+    {
+        return $this->workerIndex;
+    }
+
+    /**
+     * @param mixed $workerIndex
+     */
+    public function setWorkerIndex($workerIndex): void
+    {
+        $this->workerIndex = $workerIndex;
     }
 }

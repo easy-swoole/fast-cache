@@ -445,6 +445,7 @@ class Cache
             $config->setTempDir($this->tempDir);
             $config->setBacklog($this->backlog);
             $config->setAsyncCallback(false);
+            $config->setWorkerIndex($i);
             $array[$i] = new CacheProcess($config);
         }
         return $array;

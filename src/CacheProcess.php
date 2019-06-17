@@ -13,7 +13,6 @@ use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
 use EasySwoole\Spl\SplArray;
 use SplQueue;
 use Swoole\Coroutine\Socket;
-use Swoole\Process;
 use Throwable;
 
 class CacheProcess extends AbstractUnixProcess
@@ -56,7 +55,10 @@ class CacheProcess extends AbstractUnixProcess
         // 进程启动时执行
         if (is_callable($processConfig->getOnStart())) {
             try {
-                call_user_func($processConfig->getOnStart(), $this);
+                $ret = call_user_func($processConfig->getOnStart(),$processConfig);
+                if(is_array($ret)){
+                    $this->splArray->loadArray($ret);
+                }
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
             }
@@ -66,7 +68,7 @@ class CacheProcess extends AbstractUnixProcess
         if (is_callable($processConfig->getOnTick())) {
             $this->addTick($processConfig->getTickInterval(), function () use ($processConfig) {
                 try {
-                    call_user_func($processConfig->getOnTick(), $this);
+                    call_user_func($processConfig->getOnTick(), $this->splArray,$processConfig);
                 } catch (Throwable $throwable) {
                     $this->onException($throwable);
                 }
@@ -156,7 +158,7 @@ class CacheProcess extends AbstractUnixProcess
         $onShutdown = $this->config->getOnShutdown();
         if (is_callable($onShutdown)) {
             try {
-                call_user_func($onShutdown, $this);
+                call_user_func($onShutdown, $this->splArray,$this->getConfig());
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
             }
@@ -188,15 +190,6 @@ class CacheProcess extends AbstractUnixProcess
         // 否则丢弃该包不进行处理
         $socket->close();
         return;
-    }
-
-    /**
-     * 进程收到消息
-     * @param Process $process
-     */
-    protected function onPipeReadable(Process $process)
-    {
-
     }
 
     /**

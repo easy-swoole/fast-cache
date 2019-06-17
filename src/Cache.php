@@ -436,7 +436,7 @@ class Cache
         $array = [];
         for ($i = 1; $i <= $this->processNum; $i++) {
             $config = new CacheProcessConfig();
-            $config->setProcessName("{$this->serverName}.FastCacheProcess");
+            $config->setProcessName("{$this->serverName}.FastCacheProcess.{$i}");
             $config->setSocketFile($this->generateSocketByIndex($i));
             $config->setOnStart($this->onStart);
             $config->setOnShutdown($this->onShutdown);

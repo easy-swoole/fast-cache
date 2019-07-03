@@ -18,12 +18,6 @@ use Throwable;
 class CacheProcess extends AbstractUnixProcess
 {
     /**
-     * 进程配置
-     * @var CacheProcessConfig
-     */
-    private $config;
-
-    /**
      * Spl数组存放当前的缓存内容
      * @var SplArray
      */
@@ -159,7 +153,7 @@ class CacheProcess extends AbstractUnixProcess
      */
     public function onShutDown()
     {
-        $onShutdown = $this->config->getOnShutdown();
+        $onShutdown = $this->getConfig()->getOnShutdown();
         if (is_callable($onShutdown)) {
             try {
                 $data = new SyncData();

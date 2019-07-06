@@ -506,7 +506,7 @@ class Cache
     {
         $info = [];
         $channel = new Channel($this->processNum + 1);
-        for ($i = 1; $i < $this->processNum; $i++) {
+        for ($i = 1; $i <= $this->processNum; $i++) {
             go(function () use ($command, $channel, $i, $timeout) {
                 $ret = $this->sendAndRecv($this->generateSocketByIndex($i), $command, $timeout);
                 $channel->push([

@@ -50,9 +50,10 @@ class CacheProcess extends AbstractUnixProcess
         if (is_callable($processConfig->getOnStart())) {
             try {
                 $ret = call_user_func($processConfig->getOnStart(),$processConfig);
-                if($ret instanceof SyncData){
-                    $this->splArray = $ret->getArray();
+                if ($ret instanceof SyncData) {
+                    $this->splArray   = $ret->getArray();
                     $this->queueArray = $ret->getQueueArray();
+                    $this->ttlKeys    = $ret->getTtlKeys();
                 }
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
@@ -66,6 +67,7 @@ class CacheProcess extends AbstractUnixProcess
                     $data = new SyncData();
                     $data->setArray($this->splArray);
                     $data->setQueueArray($this->queueArray);
+                    $data->setTtlKeys($this->ttlKeys);
                     call_user_func($processConfig->getOnTick(), $data,$processConfig);
                 } catch (Throwable $throwable) {
                     $this->onException($throwable);
@@ -159,6 +161,7 @@ class CacheProcess extends AbstractUnixProcess
                 $data = new SyncData();
                 $data->setArray($this->splArray);
                 $data->setQueueArray($this->queueArray);
+                $data->setTtlKeys($this->ttlKeys);
                 call_user_func($onShutdown, $data,$this->getConfig());
             } catch (Throwable $throwable) {
                 $this->onException($throwable);

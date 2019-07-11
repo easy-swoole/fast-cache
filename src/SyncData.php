@@ -10,6 +10,7 @@ class SyncData
 {
     protected $array;
     protected $queueArray = [];
+    protected $ttlKeys = [];
 
     /**
      * @return mixed
@@ -41,5 +42,21 @@ class SyncData
     public function setQueueArray(array $queueArray): void
     {
         $this->queueArray = $queueArray;
+    }
+	
+    /**
+     * @return array
+     */
+    public function getTtlKeys(): array
+    {
+        return $this->ttlKeys;
+    }
+
+    /**
+     * @param array $ttlKeys
+     */
+    public function setTtlKeys(array $ttlKeys): void
+    {
+        $this->ttlKeys = $ttlKeys;
     }
 }

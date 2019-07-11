@@ -10,7 +10,7 @@ class SyncData
 {
     protected $array;
     protected $queueArray = [];
-	protected $ttlKeys = [];
+    protected $ttlKeys = [];
 
     /**
      * @return mixed

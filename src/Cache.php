@@ -416,6 +416,11 @@ class Cache
 
     }
 
+    public function getJob(string $jobQueue):?Job
+    {
+
+    }
+
     public function delayJob(Job $job,float $timeout = 1.0):?bool
     {
 
@@ -437,6 +442,21 @@ class Cache
     }
 
     public function buryJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
+    public function jobQueues(float $timeout = 1.0):array
+    {
+
+    }
+
+    public function flushJobQueue(string $jobQueue = null,float $timeout = 1.0)
+    {
+
+    }
+
+    public function jobQueueSize(string $jobQueue,float $timeout = 1.0):array
     {
 
     }

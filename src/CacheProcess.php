@@ -35,6 +35,14 @@ class CacheProcess extends AbstractUnixProcess
      */
     protected $ttlKeys = [];
 
+    /*
+     * queueName => []
+     */
+    protected $readyJob = [];
+    protected $delayJob = [];
+    protected $reserveJob = [];
+    protected $buryJob = [];
+
     /**
      * 进程初始化并开始监听Socket
      * @param $args

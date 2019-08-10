@@ -31,6 +31,17 @@ class Package
     const ACTION_QUEUE_LIST = 25;
     const ACTION_QUEUE_SIZE = 26;
 
+    const ACTION_PUT_JOB = 30;
+    const ACTION_GET_JOB = 31;
+    const ACTION_DELAY_JOB = 32;
+    const ACTION_RELEASE_JOB = 33;
+    const ACTION_RESERVE_JOB = 34;
+    const ACTION_DELETE_JOB = 35;
+    const ACTION_BURY_JOB = 36;
+    const ACTION_JOB_QUEUES = 37;
+    const ACTION_FLUSH_JOB_QUEUE = 38;
+    const ACTION_JOB_QUEUE_SIZE = 39;
+
     const ACTION_FLUSH = -1;
 
 

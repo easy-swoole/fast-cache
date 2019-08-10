@@ -159,7 +159,7 @@ class Cache
         $com->setCommand('set');
         $com->setValue($value);
         $com->setKey($key);
-        $com->setOption($com::OPTIONS_TTL, $ttl);
+        $com->setOption($com::ACTION_TTL, $ttl);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
@@ -175,7 +175,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('get');
+        $com->setCommand($com::ACTION_SET);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -192,7 +192,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('unset');
+        $com->setCommand($com::ACTION_UNSET);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -209,7 +209,7 @@ class Cache
             return [];
         }
         $com = new Package();
-        $com->setCommand('keys');
+        $com->setCommand($com::ACTION_KEYS);
         $com->setKey($key);
         $info = $this->broadcast($com, $timeout);
         if (is_array($info)) {
@@ -238,7 +238,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('flush');
+        $com->setCommand($com::ACTION_FLUSH);
         $this->broadcast($com, $timeout);
         return true;
     }
@@ -256,7 +256,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('enQueue');
+        $com->setCommand($com::ACTION_ENQUEUE);
         $com->setValue($value);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
@@ -274,7 +274,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('deQueue');
+        $com->setCommand($com::ACTION_DEQUEUE);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -291,7 +291,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('queueSize');
+        $com->setCommand($com::ACTION_QUEUE_SIZE);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -308,7 +308,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('unsetQueue');
+        $com->setCommand($com::ACTION_UNSET_QUEUE);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -324,7 +324,7 @@ class Cache
             return [];
         }
         $com = new Package();
-        $com->setCommand('queueList');
+        $com->setCommand($com::ACTION_QUEUE_LIST);
         $info = $this->broadcast($com, $timeout);
         if (is_array($info)) {
             $ret = [];
@@ -352,7 +352,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('flushQueue');
+        $com->setCommand($com::ACTION_FLUSH_QUEUE);
         $this->broadcast($com, $timeout);
         return true;
     }
@@ -370,10 +370,10 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('expire');
+        $com->setCommand($com::ACTION_EXPIRE);
         $com->setKey($key);
         $com->setValue($ttl);
-        $com->setOption($com::OPTIONS_TTL, $ttl);
+        $com->setOption($com::ACTION_TTL, $ttl);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
@@ -389,7 +389,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('persist');
+        $com->setCommand($com::ACTION_PERSISTS);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
@@ -406,7 +406,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand('ttl');
+        $com->setCommand($com::ACTION_TTL);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }

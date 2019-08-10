@@ -217,27 +217,24 @@ class CacheProcess extends AbstractUnixProcess
         $fromPackage = unserialize($commandPayload);
         if ($fromPackage instanceof Package) { // 进入业务处理流程
             switch ($fromPackage->getCommand()) {
-                case 'set':
+                case $fromPackage::ACTION_SET:
                     {
                         $replyPackage->setValue(true);
                         $key = $fromPackage->getKey();
                         $value = $fromPackage->getValue();
-
                         // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
-                        $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
+                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
                         if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
                             if (!is_null($ttl)) {
                                 $this->ttlKeys[$key] = time() + $ttl;
                             }
                         }
-
                         $this->splArray->set($key, $value);
                         break;
                     }
-                case 'get':
+                case $fromPackage::ACTION_GET:
                     {
                         $key = $fromPackage->getKey();
-
                         // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
                         if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
                             unset($this->ttlKeys[$key]);
@@ -246,17 +243,16 @@ class CacheProcess extends AbstractUnixProcess
                         } else {
                             $replyPackage->setValue($this->splArray->get($fromPackage->getKey()));
                         }
-
                         break;
                     }
-                case 'unset':
+                case $fromPackage::ACTION_UNSET:
                     {
                         $replyPackage->setValue(true);
                         unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
                         $this->splArray->unset($fromPackage->getKey());
                         break;
                     }
-                case 'keys':
+                case $fromPackage::ACTION_KEYS:
                     {
                         $key = $fromPackage->getKey();
                         $keys = $this->splArray->keys($key);
@@ -269,19 +265,18 @@ class CacheProcess extends AbstractUnixProcess
                         $replyPackage->setValue($this->splArray->keys($key));
                         break;
                     }
-                case 'flush':
+                case $fromPackage::ACTION_FLUSH:
                     {
                         $replyPackage->setValue(true);
                         $this->ttlKeys = [];  // 同时移除全部TTL时间
                         $this->splArray = new SplArray();
                         break;
                     }
-                case 'expire':
+                case $fromPackage::ACTION_EXPIRE:
                     {
                         $replyPackage->setValue(false);
                         $key = $fromPackage->getKey();
                         $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
-
                         // 不能给当前没有的Key设置TTL
                         if (array_key_exists($key, $this->splArray)) {
                             if (!is_null($ttl)) {
@@ -292,14 +287,14 @@ class CacheProcess extends AbstractUnixProcess
 
                         break;
                     }
-                case 'persist':
+                case $fromPackage::ACTION_PERSISTS:
                     {
                         $replyPackage->setValue(true);
                         $key = $fromPackage->getKey();
                         unset($this->ttlKeys[$key]);
                         break;
                     }
-                case 'ttl':
+                case $fromPackage::ACTION_TTL:
                     {
                         $replyPackage->setValue(null);
                         $key = $fromPackage->getKey();
@@ -314,7 +309,7 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
                     }
-                case 'enQueue':
+                case $fromPackage::ACTION_ENQUEUE:
                     {
                         $que = $this->initQueue($fromPackage->getKey());
                         $data = $fromPackage->getValue();
@@ -326,7 +321,7 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
                     }
-                case 'deQueue':
+                case $fromPackage::ACTION_DEQUEUE:
                     {
                         $que = $this->initQueue($fromPackage->getKey());
                         if ($que->isEmpty()) {
@@ -336,13 +331,13 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
                     }
-                case 'queueSize':
+                case $fromPackage::ACTION_QUEUE_SIZE:
                     {
                         $que = $this->initQueue($fromPackage->getKey());
                         $replyPackage->setValue($que->count());
                         break;
                     }
-                case 'unsetQueue':
+                case $fromPackage::ACTION_UNSET_QUEUE:
                     {
                         if (isset($this->queueArray[$fromPackage->getKey()])) {
                             unset($this->queueArray[$fromPackage->getKey()]);
@@ -352,12 +347,12 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
                     }
-                case 'queueList':
+                case $fromPackage::ACTION_QUEUE_LIST:
                     {
                         $replyPackage->setValue(array_keys($this->queueArray));
                         break;
                     }
-                case 'flushQueue':
+                case $fromPackage::ACTION_FLUSH_QUEUE:
                     {
                         $this->queueArray = [];
                         $replyPackage->setValue(true);

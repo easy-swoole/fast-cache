@@ -16,6 +16,9 @@ class Job extends SplBean
     protected $data;
     protected $delay = 0;
     protected $nextDoTime = 0;
+    protected $reserveTime = 0;
+    /** @var int 重发次数 用于限制任务重发最大限制 */
+    protected $releaseTimes = 0;
 
     /**
      * @return string
@@ -96,5 +99,41 @@ class Job extends SplBean
     {
         $this->nextDoTime = $nextDoTime;
     }
+
+    /**
+     * @return int
+     */
+    public function getReserveTime(): int
+    {
+        return $this->reserveTime;
+    }
+
+    /**
+     * @param int $reserveTime
+     */
+    public function setReserveTime(int $reserveTime): void
+    {
+        $this->reserveTime = $reserveTime;
+    }
+
+    /**
+     * @return int
+     */
+    public function getReleaseTimes(): int
+    {
+        return $this->releaseTimes;
+    }
+
+    /**
+     * @param int $releaseTimes
+     */
+    public function setReleaseTimes(int $releaseTimes): void
+    {
+        $this->releaseTimes = $releaseTimes;
+    }
+
+
+
+
 
 }

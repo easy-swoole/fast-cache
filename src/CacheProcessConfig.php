@@ -20,6 +20,8 @@ class CacheProcessConfig extends UnixProcessConfig
     protected $backlog;
     protected $workerIndex;
     protected $maxMem = '512M';
+    protected $queueReserveTime = 60;
+    protected $queueMaxReleaseTimes = 10;
 
     /**
      * @return mixed
@@ -164,4 +166,40 @@ class CacheProcessConfig extends UnixProcessConfig
     {
         $this->maxMem = $maxMem;
     }
+
+    /**
+     * @return int
+     */
+    public function getQueueReserveTime(): int
+    {
+        return $this->queueReserveTime;
+    }
+
+    /**
+     * @param int $queueReserveTime
+     */
+    public function setQueueReserveTime(int $queueReserveTime): void
+    {
+        $this->queueReserveTime = $queueReserveTime;
+    }
+
+    /**
+     * @return int
+     */
+    public function getQueueMaxReleaseTimes(): int
+    {
+        return $this->queueMaxReleaseTimes;
+    }
+
+    /**
+     * @param int $queueMaxReleaseTimes
+     */
+    public function setQueueMaxReleaseTimes(int $queueMaxReleaseTimes): void
+    {
+        $this->queueMaxReleaseTimes = $queueMaxReleaseTimes;
+    }
+
+
+
+
 }

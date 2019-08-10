@@ -15,6 +15,7 @@ class Job extends SplBean
     protected $jobId;
     protected $data;
     protected $delay = 0;
+    protected $nextDoTime = 0;
 
     /**
      * @return string
@@ -79,4 +80,21 @@ class Job extends SplBean
     {
         $this->delay = $delay;
     }
+
+    /**
+     * @return int
+     */
+    public function getNextDoTime(): int
+    {
+        return $this->nextDoTime;
+    }
+
+    /**
+     * @param int $nextDoTime
+     */
+    public function setNextDoTime(int $nextDoTime): void
+    {
+        $this->nextDoTime = $nextDoTime;
+    }
+
 }

@@ -35,12 +35,30 @@ class CacheProcess extends AbstractUnixProcess
      */
     protected $ttlKeys = [];
 
-    /*
-     * queueName => []
+    /**
+     * 分配的任务id
+     * @var array
+     */
+    protected $jobIds = [];
+    /**
+     * 可以执行的任务
+     * @var array
      */
     protected $readyJob = [];
+    /**
+     * 延迟执行的任务
+     * @var array
+     */
     protected $delayJob = [];
+    /**
+     * 保留任务（正在执行还未确认结果）
+     * @var array
+     */
     protected $reserveJob = [];
+    /**
+     * 埋藏状态的任务
+     * @var array
+     */
     protected $buryJob = [];
 
     /**
@@ -100,6 +118,22 @@ class CacheProcess extends AbstractUnixProcess
                         }
                     }
                 }
+
+                // 检测消息队列可执行性
+                foreach ($this->delayJob as $queueName => $jobs){
+                    /** @var Job $job */
+                    foreach ($jobs as $jobKey => $job){
+                        // 是否可以执行
+                        if ($job->getNextDoTime() <= time()){
+                            $canDo = $this->delayJob[$queueName][$jobKey];
+                            unset($this->delayJob[$queueName][$jobKey]);
+                            $this->readyJob[$queueName][] = $canDo;
+                        }
+                    }
+                }
+
+                // 检测保留任务是否超时 超时则放回ready队列
+
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
             }
@@ -366,8 +400,84 @@ class CacheProcess extends AbstractUnixProcess
                         $replyPackage->setValue(true);
                         break;
                     }
+                case $fromPackage::ACTION_PUT_JOB:
+                    {
+                        // 设置jobId 储存
+                        /** @var Job $job */
+                        $job     = $fromPackage->getValue();
+                        $jobName = $job->getQueue();
+                        $jobId   = $this->getJobId($jobName);
+
+                        $job->setJobId($jobId);
+
+                        // 判断是否为延迟队列
+                        if ($job->getDelay() > 0){
+                            $job->setNextDoTime(time() + $job->getDelay());
+                            $this->delayJob[$jobName][] = $job;
+                        }else{
+                            $this->readyJob[$jobName][] = $job;
+                        }
+
+                        $replyPackage->setValue($jobId);
+                        break;
+                    }
+                case $fromPackage::ACTION_GET_JOB:
+                    {
+                        $jobName = $fromPackage->getValue();
+                        if (!empty($this->readyJob[$jobName])){
+                            /** @var Job $job */
+                            $job = array_shift($this->readyJob[$jobName]);
+                        }else{
+                            $job = null;
+                        }
+                        $replyPackage->setValue($job);
+                        break;
+                    }
+
+                case $fromPackage::ACTION_DELAY_JOB:
+                    {
+                        /** @var Job $job */
+                        $job = $fromPackage->getValue();
+                        // 必须设置jobId、delay和jobQueue
+                        if (empty($job->getQueue()) || empty($job->getJobId()) || empty($job->getDelay()) ){
+                            $replyPackage->setValue(false);
+                            break;
+                        }
+
+                        $queueName = $job->getQueue();
+                        $jobId   = $job->getJobId();
+
+                        /** @var Job $readyJob */
+                        foreach ($this->readyJob[$queueName] as $readyKey => $readyJob){
+                            if ($readyJob->getJobId() == $jobId){
+                                // 改为delay状态
+                                $delayJob = $readyJob;
+                                unset($this->readyJob[$queueName][$readyKey]);
+                                $this->delayJob[$queueName][] = $delayJob;
+                                $replyPackage->setValue(true);
+                                break;
+                            }
+                        }
+
+                        $replyPackage->setValue(null);
+                        break;
+                    }
             }
         }
         return $replyPackage;
+    }
+
+    /**
+     * 根据队列名获取jobId
+     * @param string $queueName
+     * @return int
+     */
+    private function getJobId($queueName)
+    {
+        if (!isset($this->jobIds[$queueName])){
+            $this->jobIds[$queueName] = 0;
+        }
+
+        return ++$this->jobIds[$queueName];
     }
 }

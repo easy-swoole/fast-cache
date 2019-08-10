@@ -411,19 +411,49 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
+    /**
+     * 投递消息任务
+     * @param Job $job
+     * @param float $timeout
+     * @return int|null
+     */
     public function putJob(Job $job,float $timeout = 1.0):?int
     {
-
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_PUT_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
-    public function getJob(string $jobQueue):?Job
+    public function getJob(string $jobQueue, float $timeout = 1.0):?Job
     {
-
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_GET_JOB);
+        $com->setValue($jobQueue);
+        return $this->sendAndRecv($this->generateSocket($jobQueue), $com, $timeout);
     }
 
+    /**
+     * 通过jobId将ready任务转为delay任务
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
     public function delayJob(Job $job,float $timeout = 1.0):?bool
     {
-
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_DELAY_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
     public function releaseJob(Job $job,float $timeout = 1.0):?bool

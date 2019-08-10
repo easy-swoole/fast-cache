@@ -19,6 +19,7 @@ class CacheProcessConfig extends UnixProcessConfig
     protected $onShutdown;
     protected $backlog;
     protected $workerIndex;
+    protected $maxMem = '512M';
 
     /**
      * @return mixed
@@ -146,5 +147,21 @@ class CacheProcessConfig extends UnixProcessConfig
     public function setWorkerIndex($workerIndex): void
     {
         $this->workerIndex = $workerIndex;
+    }
+
+    /**
+     * @return string
+     */
+    public function getMaxMem(): string
+    {
+        return $this->maxMem;
+    }
+
+    /**
+     * @param string $maxMem
+     */
+    public function setMaxMem(string $maxMem): void
+    {
+        $this->maxMem = $maxMem;
     }
 }

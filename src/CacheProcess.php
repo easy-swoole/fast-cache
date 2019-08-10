@@ -70,6 +70,7 @@ class CacheProcess extends AbstractUnixProcess
     {
         /** @var $processConfig CacheProcessConfig */
         $processConfig = $this->getConfig();
+        ini_set('memory_limit',$processConfig->getMaxMem());
         $this->splArray = new SplArray();
 
         // 进程启动时执行

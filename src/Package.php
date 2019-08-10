@@ -34,12 +34,20 @@ class Package
     const ACTION_PUT_JOB = 30;
     const ACTION_GET_JOB = 31;
     const ACTION_DELAY_JOB = 32;
+    const ACTION_GET_DELAY_JOB = 321;
     const ACTION_RELEASE_JOB = 33;
     const ACTION_RESERVE_JOB = 34;
+    const ACTION_GET_RESERVE_JOB = 341;
     const ACTION_DELETE_JOB = 35;
     const ACTION_BURY_JOB = 36;
+    const ACTION_GET_BURY_JOB = 361;
+
     const ACTION_JOB_QUEUES = 37;
-    const ACTION_FLUSH_JOB_QUEUE = 38;
+    const ACTION_FLUSH_JOB = 38;
+    const ACTION_FLUSH_READY_JOB = 381;
+    const ACTION_FLUSH_RESERVE_JOB = 382;
+    const ACTION_FLUSH_BURY_JOB = 383;
+    const ACTION_FLUSH_DELAY_JOB = 384;
     const ACTION_JOB_QUEUE_SIZE = 39;
 
     const ACTION_FLUSH = -1;

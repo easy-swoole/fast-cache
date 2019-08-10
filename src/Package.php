@@ -15,8 +15,9 @@ class Package
     protected $value;
     protected $key;
     protected $options = [];
-
-    const OPTIONS_TTL = 'ttl';  // ttl seconds
+    const ACTION_SET = 'set';
+    const ACTION_GET = 'get';
+    const OPTIONS_TTL = 'ttl';
 
     /**
      * @return mixed

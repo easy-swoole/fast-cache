@@ -15,9 +15,24 @@ class Package
     protected $value;
     protected $key;
     protected $options = [];
-    const ACTION_SET = 'set';
-    const ACTION_GET = 'get';
-    const OPTIONS_TTL = 'ttl';
+
+    const ACTION_SET = 11;
+    const ACTION_GET =  12;
+    const ACTION_KEYS = 13;
+    const ACTION_UNSET = 14;
+    const ACTION_PERSISTS = 15;
+    const ACTION_EXPIRE = 16;
+    const ACTION_TTL = 17;
+
+    const ACTION_DEQUEUE  = 21;
+    const ACTION_ENQUEUE  = 22;
+    const ACTION_UNSET_QUEUE = 23;
+    const ACTION_FLUSH_QUEUE = 24;
+    const ACTION_QUEUE_LIST = 25;
+    const ACTION_QUEUE_SIZE = 26;
+
+    const ACTION_FLUSH = -1;
+
 
     /**
      * @return mixed

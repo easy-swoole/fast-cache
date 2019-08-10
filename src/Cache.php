@@ -411,6 +411,36 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
+    public function putJob(Job $job,float $timeout = 1.0):?int
+    {
+
+    }
+
+    public function delayJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
+    public function releaseJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
+    public function reserveJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
+    public function deleteJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
+    public function buryJob(Job $job,float $timeout = 1.0):?bool
+    {
+
+    }
+
     /**
      * 绑定到当前主服务
      * @param swoole_server $server

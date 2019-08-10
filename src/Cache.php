@@ -466,9 +466,29 @@ class Cache
 
     }
 
+    /**
+     * 删除任务
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
     public function deleteJob(Job $job,float $timeout = 1.0):?bool
     {
+        if ($this->processNum <= 0) {
+            return null;
+        }
 
+        if (!$job->getJobId()){
+            return false;
+        }
+        if (!$job->getQueue()){
+            return false;
+        }
+
+        $com = new Package();
+        $com->setCommand($com::ACTION_DELETE_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
     public function buryJob(Job $job,float $timeout = 1.0):?bool

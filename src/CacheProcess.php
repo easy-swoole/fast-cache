@@ -133,7 +133,23 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 }
 
-                // 检测保留任务是否超时 超时则放回ready队列
+                // 检测保留任务是否超时
+                foreach ($this->reserveJob as $queueName => $jobs){
+                    /** @var Job $job */
+                    foreach ($jobs as $jobKey => $job){
+                        // 取出时间 + 超时时间 < 当前时间 则放回ready
+                        if ($job->getReserveTime() + $processConfig->getQueueReserveTime() < time()){
+                            $readyJob = $this->reserveJob[$queueName][$jobKey];
+                            unset($this->reserveJob[$queueName][$jobKey]);
+                            // 判断最大重发次数
+                            $releaseTimes = $job->getReleaseTimes();
+                            if ($releaseTimes < $processConfig->getQueueMaxReleaseTimes()){
+                                $job->setReleaseTimes(++$releaseTimes);
+                                $this->readyJob[$queueName][] = $readyJob;
+                            }
+                        }
+                    }
+                }
 
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
@@ -405,18 +421,19 @@ class CacheProcess extends AbstractUnixProcess
                     {
                         // 设置jobId 储存
                         /** @var Job $job */
-                        $job     = $fromPackage->getValue();
-                        $jobName = $job->getQueue();
-                        $jobId   = $this->getJobId($jobName);
+                        $job       = $fromPackage->getValue();
+                        $queueName = $job->getQueue();
+                        $jobId     = $this->getJobId($queueName);
 
                         $job->setJobId($jobId);
 
+                        $jobKey = "_".$jobId;
                         // 判断是否为延迟队列
                         if ($job->getDelay() > 0){
                             $job->setNextDoTime(time() + $job->getDelay());
-                            $this->delayJob[$jobName][] = $job;
+                            $this->delayJob[$queueName][$jobKey] = $job;
                         }else{
-                            $this->readyJob[$jobName][] = $job;
+                            $this->readyJob[$queueName][$jobKey] = $job;
                         }
 
                         $replyPackage->setValue($jobId);
@@ -424,10 +441,14 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 case $fromPackage::ACTION_GET_JOB:
                     {
-                        $jobName = $fromPackage->getValue();
-                        if (!empty($this->readyJob[$jobName])){
+                        $queueName = $fromPackage->getValue();
+                        if (!empty($this->readyJob[$queueName])){
                             /** @var Job $job */
-                            $job = array_shift($this->readyJob[$jobName]);
+                            $job = array_shift($this->readyJob[$queueName]);
+                            // 设置reserveTime 放到reserveJob队列
+                            $job->setReserveTime(time());
+                            $jobId = "_". $job->getJobId();
+                            $this->reserveJob[$queueName][$jobId] = $job;
                         }else{
                             $job = null;
                         }
@@ -446,21 +467,50 @@ class CacheProcess extends AbstractUnixProcess
                         }
 
                         $queueName = $job->getQueue();
-                        $jobId   = $job->getJobId();
+                        $jobId     = "_".$job->getJobId();
 
                         /** @var Job $readyJob */
-                        foreach ($this->readyJob[$queueName] as $readyKey => $readyJob){
-                            if ($readyJob->getJobId() == $jobId){
-                                // 改为delay状态
-                                $delayJob = $readyJob;
-                                unset($this->readyJob[$queueName][$readyKey]);
-                                $this->delayJob[$queueName][] = $delayJob;
-                                $replyPackage->setValue(true);
-                                break;
-                            }
-                        }
+//                        foreach ($this->readyJob[$queueName] as $readyKey => $readyJob){
+//                            if ($readyJob->getJobId() == $jobId){
+//                                // 改为delay状态
+//                                $delayJob = $readyJob;
+//                                unset($this->readyJob[$queueName][$readyKey]);
+//                                $this->delayJob[$queueName][] = $delayJob;
+//                                $replyPackage->setValue(true);
+//                                break;
+//                            }
+//                        }
 
                         $replyPackage->setValue(null);
+                        break;
+                    }
+                case $fromPackage::ACTION_DELETE_JOB:
+                    {
+                        /** @var Job $job */
+                        $job       = $fromPackage->getValue();
+                        $jobId     = "_".$job->getJobId();
+                        $queueName = $job->getQueue();
+                        if (isset($this->readyJob[$queueName][$jobId])){
+                            unset($this->readyJob[$queueName][$jobId]);
+                            $replyPackage->setValue(true);
+                            break;
+                        }
+                        if (isset($this->reserveJob[$queueName][$jobId])){
+                            unset($this->reserveJob[$queueName][$jobId]);
+                            $replyPackage->setValue(true);
+                            break;
+                        }
+                        if (isset($this->delayJob[$queueName][$jobId])){
+                            unset($this->delayJob[$queueName][$jobId]);
+                            $replyPackage->setValue(true);
+                            break;
+                        }
+                        if (isset($this->buryJob[$queueName][$jobId])){
+                            unset($this->buryJob[$queueName][$jobId]);
+                            $replyPackage->setValue(true);
+                            break;
+                        }
+                        $replyPackage->setValue(false);
                         break;
                     }
             }

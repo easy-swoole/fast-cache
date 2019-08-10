@@ -13,11 +13,17 @@ go(function (){
     $job->setQueue("siam_queue2"); // 测试投递到不同的queue  id是否独立递增
     $jobId = Cache::getInstance()->putJob($job);
     var_dump($jobId);
-
     // **** 取出可执行任务 ****
     $job = Cache::getInstance()->getJob('siam_queue2');
     var_dump($job); // Job对象或者null
-    // 执行完了要删除或者重发，否则超时会自动重发（超时检测还没做）
+    if ($job === null){
+        echo "没有任务\n";
+    }else{
+        // 执行业务逻辑
+        // 执行完了要删除或者重发，否则超时会自动重发
+        Cache::getInstance()->deleteJob($job);
+    }
+
 
     // **** 投递延时任务 ****
     $job = new Job();

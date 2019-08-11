@@ -456,9 +456,21 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
+    /**
+     * 任务重发
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
     public function releaseJob(Job $job,float $timeout = 1.0):?bool
     {
-
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_RELEASE_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
     public function reserveJob(Job $job,float $timeout = 1.0):?bool
@@ -498,17 +510,65 @@ class Cache
 
     public function jobQueues(float $timeout = 1.0):array
     {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_JOB_QUEUES);
+        $info = $this->broadcast($com, $timeout);
+
+        if (is_array($info)) {
+            $ret = [];
+            foreach ($info as $item) {
+                if (is_array($item)) {
+                    foreach ($item as $subKey => $sub) {
+                        $ret[] = $sub;
+                    }
+                }
+            }
+            return $ret;
+        } else {
+            return null;
+        }
 
     }
 
     public function flushJobQueue(string $jobQueue = null,float $timeout = 1.0)
     {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        if ($jobQueue !== null){
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_JOB);
+            $com->setValue($jobQueue);
+            return $this->sendAndRecv($this->generateSocket($jobQueue), $com, $timeout);
+        }else{
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_JOB);
+            $com->setValue($jobQueue);
+            $info = $this->broadcast($com, $timeout);
+
+            if (is_array($info)) {
+                return $info;
+            } else {
+                return null;
+            }
+        }
 
     }
 
     public function jobQueueSize(string $jobQueue,float $timeout = 1.0):array
     {
+        if ($this->processNum <= 0) {
+            return null;
+        }
 
+        $com = new Package();
+        $com->setCommand($com::ACTION_JOB_QUEUE_SIZE);
+        $com->setValue($jobQueue);
+        return $this->sendAndRecv($this->generateSocket($jobQueue), $com, $timeout);
     }
 
     /**

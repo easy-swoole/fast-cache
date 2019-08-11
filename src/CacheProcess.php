@@ -464,28 +464,35 @@ class CacheProcess extends AbstractUnixProcess
                     {
                         /** @var Job $job */
                         $job = $fromPackage->getValue();
-                        // 必须设置jobId、delay和jobQueue
-                        if (empty($job->getQueue()) || empty($job->getJobId()) || empty($job->getDelay()) ){
-                            $replyPackage->setValue(false);
-                            break;
-                        }
-
                         $queueName = $job->getQueue();
                         $jobId     = "_".$job->getJobId();
 
-                        /** @var Job $readyJob */
-//                        foreach ($this->readyJob[$queueName] as $readyKey => $readyJob){
-//                            if ($readyJob->getJobId() == $jobId){
-//                                // 改为delay状态
-//                                $delayJob = $readyJob;
-//                                unset($this->readyJob[$queueName][$readyKey]);
-//                                $this->delayJob[$queueName][] = $delayJob;
-//                                $replyPackage->setValue(true);
-//                                break;
-//                            }
-//                        }
+                        $delay = $job->getDelay();
 
-                        $replyPackage->setValue(null);
+                        $job = $this->readyJob[$queueName][$jobId] ?? $this->reserveJob[$queueName][$jobId]
+                            ?? $this->buryJob[$queueName][$jobId];
+
+
+                        if (!$job){
+                            $replyPackage->setValue(false);
+                            break;
+                        }
+                        $job->setDelay($delay);
+                        if ($job->getDelay() == 0){
+                            $replyPackage->setValue(false);
+                            break;
+                        }
+                        $job->setNextDoTime(time() + $job->getDelay());
+
+
+                        $this->delayJob[$queueName][$jobId] = $job;
+
+                        unset($this->readyJob[$queueName][$jobId]);
+                        unset($this->reserveJob[$queueName][$jobId]);
+                        unset($this->buryJob[$queueName][$jobId]);
+
+
+                        $replyPackage->setValue(true);
                         break;
                     }
                 case $fromPackage::ACTION_DELETE_JOB:
@@ -605,6 +612,33 @@ class CacheProcess extends AbstractUnixProcess
 
                         $replyPackage->setValue($jobId);
                         break;
+                    }
+                case $fromPackage::ACTION_RESERVE_JOB:
+                    {
+                        /** @var Job $job */
+                        $job = $fromPackage->getValue();
+                        $queueName = $job->getQueue();
+                        $jobId     = "_".$job->getJobId();
+
+                        $job = $this->readyJob[$queueName][$jobId] ?? $this->delayJob[$queueName][$jobId]
+                             ?? $this->buryJob[$queueName][$jobId];
+
+                        if (!$job){
+                            $replyPackage->setValue(false);
+                            break;
+                        }
+
+                        $job->setReserveTime(time());
+
+                        $this->reserveJob[$queueName][$jobId] = $job;
+
+                        unset($this->readyJob[$queueName][$jobId]);
+                        unset($this->delayJob[$queueName][$jobId]);
+                        unset($this->buryJob[$queueName][$jobId]);
+
+                        $replyPackage->setValue($job);
+                        break;
+
                     }
             }
         }

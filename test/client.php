@@ -77,9 +77,41 @@ go(function (){
 //    var_dump($job);
 //
 //    // **** 手动把ready任务改为reserve状态 ****
-//
+    $job = new Job();
+    $job->setData("luffy");
+    $job->setQueue("luffy_queue_reserve");
+
+    $jobId = Cache::getInstance()->putJob($job);
+    //var_dump($jobId);
+    $job->setJobId($jobId);
+    var_dump($job);
+
+    var_dump(Cache::getInstance()->reserveJob($job));
+
+    $queueSize = Cache::getInstance()->jobQueueSize("luffy_queue_reserve");
+    var_dump($queueSize);
 //    // **** 手动把ready任务改为delay状态 ****
+
+//    $job = new Job();
+//    $job->setData("luffy");
+//    $job->setQueue("luffy_queue_delay");
+
+    //$jobId = Cache::getInstance()->putJob($job);
+
+    //var_dump($jobId);
+
+
+    //$job = Cache::getInstance()->getJob('luffy_queue_delay');
+//    $job->setJobId(1);
+//    $job->setDelay(30);
 //
+//
+    //var_dump($job);
+    //var_dump(Cache::getInstance()->delayJob($job));
+
+
+//    $queueSize = Cache::getInstance()->jobQueueSize("luffy_queue_delay");
+//    var_dump($queueSize);
 //    // **** 删除任务 ****
 //    $job = new Job();
 //    $job->setJobId(1);

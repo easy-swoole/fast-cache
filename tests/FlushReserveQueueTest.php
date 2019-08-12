@@ -56,7 +56,7 @@ class FlushReserveQueueTest extends TestCase
      * @param string $queueName
      * @depends testFlushReserve
      */
-    function testBurySize(string $queueName)
+    function testReserveSize(string $queueName)
     {
         $res = Cache::getInstance()->jobQueueSize($queueName);
         $this->assertEquals(0, $res['reserve']);

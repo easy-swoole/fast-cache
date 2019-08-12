@@ -52,7 +52,7 @@ class FlushDelayQueueTest extends TestCase
      * @param string $queueName
      * @depends testFlushDelay
      */
-    function testBurySize(string $queueName)
+    function testDelaySize(string $queueName)
     {
         $res = Cache::getInstance()->jobQueueSize($queueName);
         $this->assertEquals(0, $res['delay']);

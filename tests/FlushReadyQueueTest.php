@@ -52,7 +52,7 @@ class FlushReadyQueueTest extends TestCase
      * @param string $queueName
      * @depends testFlushReady
      */
-    function testBurySize(string $queueName)
+    function testReadySize(string $queueName)
     {
         $res = Cache::getInstance()->jobQueueSize($queueName);
         $this->assertEquals(0, $res['ready']);

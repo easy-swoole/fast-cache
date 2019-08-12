@@ -479,7 +479,7 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function reserveJob(Job $job,float $timeout = 1.0):?object
+    public function reserveJob(Job $job,float $timeout = 1.0):?bool
     {
         if ($this->processNum <= 0) {
             return null;

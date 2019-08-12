@@ -41,6 +41,7 @@ class Package
     const ACTION_DELETE_JOB = 35;
     const ACTION_BURY_JOB = 36;
     const ACTION_GET_BURY_JOB = 361;
+    const ACTION_KICK_JOB = 362;
 
     const ACTION_JOB_QUEUES = 37;
     const ACTION_FLUSH_JOB = 38;

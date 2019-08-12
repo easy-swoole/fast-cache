@@ -636,7 +636,7 @@ class CacheProcess extends AbstractUnixProcess
                         unset($this->delayJob[$queueName][$jobId]);
                         unset($this->buryJob[$queueName][$jobId]);
 
-                        $replyPackage->setValue($job);
+                        $replyPackage->setValue(true);
                         break;
 
                     }

@@ -440,6 +440,39 @@ class Cache
     }
 
     /**
+     * 从延迟执行队列中拿取
+     * @param string $queueName
+     * @param float $timeout
+     * @return Job|null
+     */
+    public function getDelayJob(string $queueName, float $timeout = 1.0):?Job
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_GET_DELAY_JOB);
+        $com->setValue($queueName);
+        return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+    }
+
+    /**
+     * 从保留队列中拿取
+     * @param string $queueName
+     * @param float $timeout
+     * @return Job|null
+     */
+    public function getReserveJob(string $queueName, float $timeout = 1.0):?Job
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_GET_RESERVE_JOB);
+        $com->setValue($queueName);
+        return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+    }
+    /**
      * 通过jobId将ready任务转为delay任务
      * @param Job $job
      * @param float $timeout
@@ -515,9 +548,73 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
+    /**
+     * 将某个任务bury掉 直到kick
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
     public function buryJob(Job $job,float $timeout = 1.0):?bool
     {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        // 必须传递queueName和jobId
+        if (empty($job->getJobId())){
+            return false;
+        }
+        if (empty($job->getQueue())){
+            return false;
+        }
 
+        $com = new Package();
+        $com->setCommand($com::ACTION_BURY_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
+    }
+
+    /**
+     * 从bury状态中拿取一个任务
+     * @param string $queueName
+     * @param float $timeout
+     * @return Job|null
+     */
+    public function getBuryJob(string $queueName, float $timeout = 1.0):?Job
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        $com = new Package();
+        $com->setCommand($com::ACTION_GET_BURY_JOB);
+        $com->setValue($queueName);
+        return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+    }
+
+    /**
+     * 将bury任务恢复到ready中
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
+    public function kickJob(Job $job, float $timeout = 1.0):?bool
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        // 必须传递queueName和jobId
+        if (empty($job->getJobId())){
+            return false;
+        }
+        if (empty($job->getQueue())){
+            return false;
+        }
+
+        $com = new Package();
+        $com->setCommand($com::ACTION_KICK_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
     public function jobQueues(float $timeout = 1.0):array
@@ -569,6 +666,127 @@ class Cache
             }
         }
 
+    }
+
+    /**
+     * 只清空ready任务队列 可指定
+     * @param string|NULL $queueName
+     * @param float $timeout
+     * @return array|mixed|null
+     */
+    public function flushReadyJobQueue(string $queueName = null,float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        if ($queueName !== null){
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_READY_JOB);
+            $com->setValue($queueName);
+            return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+        }else{
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_READY_JOB);
+            $com->setValue($queueName);
+            $info = $this->broadcast($com, $timeout);
+
+            if (is_array($info)) {
+                return $info;
+            } else {
+                return null;
+            }
+        }
+    }
+    /**
+     * 只清空reserve任务队列 可指定
+     * @param string|NULL $queueName
+     * @param float $timeout
+     * @return array|mixed|null
+     */
+    public function flushReserveJobQueue(string $queueName = null,float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        if ($queueName !== null){
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_RESERVE_JOB);
+            $com->setValue($queueName);
+            return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+        }else{
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_RESERVE_JOB);
+            $com->setValue($queueName);
+            $info = $this->broadcast($com, $timeout);
+
+            if (is_array($info)) {
+                return $info;
+            } else {
+                return null;
+            }
+        }
+    }
+    /**
+     * 只清空BURY任务队列 可指定
+     * @param string|NULL $queueName
+     * @param float $timeout
+     * @return array|mixed|null
+     */
+    public function flushBuryJobQueue(string $queueName = null,float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        if ($queueName !== null){
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_BURY_JOB);
+            $com->setValue($queueName);
+            return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+        }else{
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_BURY_JOB);
+            $com->setValue($queueName);
+            $info = $this->broadcast($com, $timeout);
+
+            if (is_array($info)) {
+                return $info;
+            } else {
+                return null;
+            }
+        }
+    }
+    /**
+     * 只清空delay任务队列 可指定
+     * @param string|NULL $queueName
+     * @param float $timeout
+     * @return array|mixed|null
+     */
+    public function flushDelayJobQueue(string $queueName = null,float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+
+        if ($queueName !== null){
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_DELAY_JOB);
+            $com->setValue($queueName);
+            return $this->sendAndRecv($this->generateSocket($queueName), $com, $timeout);
+        }else{
+            $com = new Package();
+            $com->setCommand($com::ACTION_FLUSH_DELAY_JOB);
+            $com->setValue($queueName);
+            $info = $this->broadcast($com, $timeout);
+
+            if (is_array($info)) {
+                return $info;
+            } else {
+                return null;
+            }
+        }
     }
 
     public function jobQueueSize(string $jobQueue,float $timeout = 1.0):array

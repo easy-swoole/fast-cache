@@ -495,6 +495,34 @@ class CacheProcess extends AbstractUnixProcess
                         $replyPackage->setValue(true);
                         break;
                     }
+                case $fromPackage::ACTION_GET_DELAY_JOB:
+                    {
+                        /** @var Job $job */
+                        $queueName = $fromPackage->getValue();
+
+                        if (isset($this->delayJob[$queueName])){
+                            $job = array_shift($this->delayJob[$queueName]);
+                        }else{
+                            $job = null;
+                        }
+                        $replyPackage->setValue($job);
+                        break;
+                    }
+                case $fromPackage::ACTION_GET_RESERVE_JOB:
+                    {
+                        // 从保留任务中拿取
+                        /** @var Job $job */
+                        $queueName = $fromPackage->getValue();
+
+                        if (isset($this->reserveJob[$queueName])){
+                            $job = array_shift($this->reserveJob[$queueName]);
+                        }else{
+                            $job = null;
+                        }
+                        $replyPackage->setValue($job);
+                        break;
+                        break;
+                    }
                 case $fromPackage::ACTION_DELETE_JOB:
                     {
                         /** @var Job $job */
@@ -561,6 +589,58 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->delayJob[$queueName]);
                             unset($this->reserveJob[$queueName]);
                             unset($this->buryJob[$queueName]);
+                        }
+
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+                case $fromPackage::ACTION_FLUSH_READY_JOB:
+                    {
+                        $queueName = $fromPackage->getValue();
+
+                        if ($queueName === null){
+                            $this->readyJob    = [];
+                        }else{
+                            unset($this->readyJob[$queueName]);
+                        }
+
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+                case $fromPackage::ACTION_FLUSH_RESERVE_JOB:
+                    {
+                        $queueName = $fromPackage->getValue();
+
+                        if ($queueName === null){
+                            $this->reserveJob    = [];
+                        }else{
+                            unset($this->reserveJob[$queueName]);
+                        }
+
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+                case $fromPackage::ACTION_FLUSH_BURY_JOB:
+                    {
+                        $queueName = $fromPackage->getValue();
+
+                        if ($queueName === null){
+                            $this->buryJob    = [];
+                        }else{
+                            unset($this->buryJob[$queueName]);
+                        }
+
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+                case $fromPackage::ACTION_FLUSH_DELAY_JOB:
+                    {
+                        $queueName = $fromPackage->getValue();
+
+                        if ($queueName === null){
+                            $this->delayJob    = [];
+                        }else{
+                            unset($this->delayJob[$queueName]);
                         }
 
                         $replyPackage->setValue(true);
@@ -638,8 +718,61 @@ class CacheProcess extends AbstractUnixProcess
 
                         $replyPackage->setValue(true);
                         break;
+                    }
+                case $fromPackage::ACTION_BURY_JOB:
+                    {
+                        /** @var Job $job */
+                        $job = $fromPackage->getValue();
+                        $queueName = $job->getQueue();
+                        $jobId     = $job->getJobId();
+                        $jobKey    = "_".$jobId;
+
+                        // 重新拿job 兼容手动传递jobId来bury
+                        $job = $this->readyJob[$queueName][$jobKey] ?? $this->delayJob[$queueName][$jobKey]
+                            ?? $this->reserveJob[$queueName][$jobKey];
+
+                        $this->buryJob[$queueName][$jobKey] = $job;
+
+                        unset($this->readyJob[$queueName][$jobKey]);
+                        unset($this->delayJob[$queueName][$jobKey]);
+                        unset($this->reserveJob[$queueName][$jobKey]);
+
+                        $replyPackage->setValue(true);
+                        break;
+                    }
+                case $fromPackage::ACTION_GET_BURY_JOB:
+                    {
+                        $queueName = $fromPackage->getValue();
+
+                        if (isset($this->buryJob[$queueName])){
+                            $job = array_shift($this->buryJob[$queueName]);
+                        }else{
+                            $job = null;
+                        }
+
+                        $replyPackage->setValue($job);
+                        break;
+                    }
+                case $fromPackage::ACTION_KICK_JOB:
+                    {
+                        /** @var Job $job */
+                        $job = $fromPackage->getValue();
+                        $queueName = $job->getQueue();
+                        $jobId     = $job->getJobId();
+                        $jobKey    = "_".$jobId;
+
+                        if (isset($this->buryJob[$queueName][$jobKey])){
+                            $readyJob = $this->buryJob[$queueName][$jobKey];
+                            unset($this->buryJob[$queueName][$jobKey]);
+                            $this->readyJob[$queueName][$jobKey] = $readyJob;
+                            $replyPackage->setValue(true);
+                        }else{
+                            $replyPackage->setValue(false);
+                        }
+                        break;
 
                     }
+
             }
         }
         return $replyPackage;

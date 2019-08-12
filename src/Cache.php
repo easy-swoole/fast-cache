@@ -473,9 +473,21 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
-    public function reserveJob(Job $job,float $timeout = 1.0):?bool
+    /**
+     * 将ready 任务转为reserve任务
+     * @param Job $job
+     * @param float $timeout
+     * @return bool|null
+     */
+    public function reserveJob(Job $job,float $timeout = 1.0):?object
     {
-
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_RESERVE_JOB);
+        $com->setValue($job);
+        return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
     /**

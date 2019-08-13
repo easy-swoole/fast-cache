@@ -789,7 +789,7 @@ class Cache
         }
     }
 
-    public function jobQueueSize(string $jobQueue,float $timeout = 1.0):array
+    public function jobQueueSize(string $jobQueue,float $timeout = 1.0):?array
     {
         if ($this->processNum <= 0) {
             return null;

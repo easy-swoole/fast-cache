@@ -81,6 +81,12 @@ class CacheProcess extends AbstractUnixProcess
                     $this->splArray   = $ret->getArray();
                     $this->queueArray = $ret->getQueueArray();
                     $this->ttlKeys    = $ret->getTtlKeys();
+                    // queue 支持
+                    $this->jobIds     = $ret->getJobIds();
+                    $this->readyJob   = $ret->getReadyJob();
+                    $this->delayJob   = $ret->getDelayJob();
+                    $this->reserveJob = $ret->getReserveJob();
+                    $this->buryJob    = $ret->getBuryJob();
                 }
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
@@ -95,6 +101,13 @@ class CacheProcess extends AbstractUnixProcess
                     $data->setArray($this->splArray);
                     $data->setQueueArray($this->queueArray);
                     $data->setTtlKeys($this->ttlKeys);
+                    // queue 支持
+                    $data->setJobIds($this->jobIds);
+                    $data->setReadyJob($this->readyJob);
+                    $data->setReserveJob($this->reserveJob);
+                    $data->setDelayJob($this->delayJob);
+                    $data->setBuryJob($this->buryJob);
+
                     call_user_func($processConfig->getOnTick(), $data,$processConfig);
                 } catch (Throwable $throwable) {
                     $this->onException($throwable);
@@ -225,6 +238,13 @@ class CacheProcess extends AbstractUnixProcess
                 $data->setArray($this->splArray);
                 $data->setQueueArray($this->queueArray);
                 $data->setTtlKeys($this->ttlKeys);
+                // queue 支持
+                $data->setJobIds($this->jobIds);
+                $data->setReadyJob($this->readyJob);
+                $data->setReserveJob($this->reserveJob);
+                $data->setDelayJob($this->delayJob);
+                $data->setBuryJob($this->buryJob);
+
                 call_user_func($onShutdown, $data,$this->getConfig());
             } catch (Throwable $throwable) {
                 $this->onException($throwable);

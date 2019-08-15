@@ -292,17 +292,18 @@ class CacheProcess extends AbstractUnixProcess
     /**
      * 执行命令
      * @param $commandPayload
-     * @return Package
+     * @return mixed
      */
-    protected function executeCommand(?string $commandPayload): Package
+    protected function executeCommand(?string $commandPayload)
     {
-        $replyPackage = new Package();
+        // $replyPackage = new Package();
+        $replayData  = null;
         $fromPackage = unserialize($commandPayload);
         if ($fromPackage instanceof Package) { // 进入业务处理流程
             switch ($fromPackage->getCommand()) {
                 case $fromPackage::ACTION_SET:
                     {
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         $key = $fromPackage->getKey();
                         $value = $fromPackage->getValue();
                         // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
@@ -322,15 +323,15 @@ class CacheProcess extends AbstractUnixProcess
                         if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
                             unset($this->ttlKeys[$key]);
                             $this->splArray->unset($key);
-                            $replyPackage->setValue(null);
+                            $replayData = null;
                         } else {
-                            $replyPackage->setValue($this->splArray->get($fromPackage->getKey()));
+                            $replayData = $this->splArray->get($fromPackage->getKey());
                         }
                         break;
                     }
                 case $fromPackage::ACTION_UNSET:
                     {
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
                         $this->splArray->unset($fromPackage->getKey());
                         break;
@@ -345,26 +346,26 @@ class CacheProcess extends AbstractUnixProcess
                                 unset($keys[$ttlKey], $this->ttlKeys[$ttlKey]);  // 立刻释放过期的ttlKey
                             }
                         }
-                        $replyPackage->setValue($this->splArray->keys($key));
+                        $replayData = $this->splArray->keys($key);
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH:
                     {
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         $this->ttlKeys = [];  // 同时移除全部TTL时间
                         $this->splArray = new SplArray();
                         break;
                     }
                 case $fromPackage::ACTION_EXPIRE:
                     {
-                        $replyPackage->setValue(false);
+                        $replayData = false;
                         $key = $fromPackage->getKey();
                         $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
                         // 不能给当前没有的Key设置TTL
                         if (array_key_exists($key, $this->splArray)) {
                             if (!is_null($ttl)) {
                                 $this->ttlKeys[$key] = time() + $ttl;
-                                $replyPackage->setValue(true);
+                                $replayData = true;
                             }
                         }
 
@@ -372,14 +373,14 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 case $fromPackage::ACTION_PERSISTS:
                     {
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         $key = $fromPackage->getKey();
                         unset($this->ttlKeys[$key]);
                         break;
                     }
                 case $fromPackage::ACTION_TTL:
                     {
-                        $replyPackage->setValue(null);
+                        $replayData = null;
                         $key = $fromPackage->getKey();
                         $time = time();
 
@@ -387,7 +388,7 @@ class CacheProcess extends AbstractUnixProcess
                         if (array_key_exists($key, $this->splArray) && array_key_exists($key, $this->ttlKeys)) {
                             $expire = $this->ttlKeys[$key];
                             if ($expire > $time) {  // 有剩余时间时才会返回剩余ttl 否则返回null表示已经过期或未设置 不区分主动过期和key不存在的情况
-                                $replyPackage->setValue($expire - $time);
+                                $replayData = $expire - $time;
                             }
                         }
                         break;
@@ -398,9 +399,9 @@ class CacheProcess extends AbstractUnixProcess
                         $data = $fromPackage->getValue();
                         if ($data !== null) {
                             $que->enqueue($fromPackage->getValue());
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                         } else {
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                         }
                         break;
                     }
@@ -408,37 +409,37 @@ class CacheProcess extends AbstractUnixProcess
                     {
                         $que = $this->initQueue($fromPackage->getKey());
                         if ($que->isEmpty()) {
-                            $replyPackage->setValue(null);
+                            $replayData = null;
                         } else {
-                            $replyPackage->setValue($que->dequeue());
+                            $replayData = $que->dequeue();
                         }
                         break;
                     }
                 case $fromPackage::ACTION_QUEUE_SIZE:
                     {
                         $que = $this->initQueue($fromPackage->getKey());
-                        $replyPackage->setValue($que->count());
+                        $replayData = $que->count();
                         break;
                     }
                 case $fromPackage::ACTION_UNSET_QUEUE:
                     {
                         if (isset($this->queueArray[$fromPackage->getKey()])) {
                             unset($this->queueArray[$fromPackage->getKey()]);
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                         } else {
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                         }
                         break;
                     }
                 case $fromPackage::ACTION_QUEUE_LIST:
                     {
-                        $replyPackage->setValue(array_keys($this->queueArray));
+                        $replayData = array_keys($this->queueArray);
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_QUEUE:
                     {
                         $this->queueArray = [];
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_PUT_JOB:
@@ -460,7 +461,7 @@ class CacheProcess extends AbstractUnixProcess
                             $this->readyJob[$queueName][$jobKey] = $job;
                         }
 
-                        $replyPackage->setValue($jobId);
+                        $replayData = $jobId;
                         break;
                     }
                 case $fromPackage::ACTION_GET_JOB:
@@ -476,7 +477,7 @@ class CacheProcess extends AbstractUnixProcess
                         }else{
                             $job = null;
                         }
-                        $replyPackage->setValue($job);
+                        $replayData = $job;
                         break;
                     }
 
@@ -494,12 +495,12 @@ class CacheProcess extends AbstractUnixProcess
 
 
                         if (!$job){
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                             break;
                         }
                         $job->setDelay($delay);
                         if ($job->getDelay() == 0){
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                             break;
                         }
                         $job->setNextDoTime(time() + $job->getDelay());
@@ -512,7 +513,7 @@ class CacheProcess extends AbstractUnixProcess
                         unset($this->buryJob[$queueName][$jobId]);
 
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_GET_DELAY_JOB:
@@ -525,7 +526,7 @@ class CacheProcess extends AbstractUnixProcess
                         }else{
                             $job = null;
                         }
-                        $replyPackage->setValue($job);
+                        $replayData = $job;
                         break;
                     }
                 case $fromPackage::ACTION_GET_RESERVE_JOB:
@@ -539,7 +540,7 @@ class CacheProcess extends AbstractUnixProcess
                         }else{
                             $job = null;
                         }
-                        $replyPackage->setValue($job);
+                        $replayData = $job;
                         break;
                         break;
                     }
@@ -551,25 +552,25 @@ class CacheProcess extends AbstractUnixProcess
                         $queueName = $job->getQueue();
                         if (isset($this->readyJob[$queueName][$jobId])){
                             unset($this->readyJob[$queueName][$jobId]);
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                             break;
                         }
                         if (isset($this->reserveJob[$queueName][$jobId])){
                             unset($this->reserveJob[$queueName][$jobId]);
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                             break;
                         }
                         if (isset($this->delayJob[$queueName][$jobId])){
                             unset($this->delayJob[$queueName][$jobId]);
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                             break;
                         }
                         if (isset($this->buryJob[$queueName][$jobId])){
                             unset($this->buryJob[$queueName][$jobId]);
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                             break;
                         }
-                        $replyPackage->setValue(false);
+                        $replayData = false;
                         break;
                     }
                 case $fromPackage::ACTION_JOB_QUEUES:
@@ -580,7 +581,7 @@ class CacheProcess extends AbstractUnixProcess
                         $buryJob    = array_keys($this->buryJob);
 
                         $queue   = array_unique(array_merge($readyJob, $delayJob, $reserveJob, $buryJob));
-                        $replyPackage->setValue($queue);
+                        $replayData = $queue;
                         break;
                     }
                 case $fromPackage::ACTION_JOB_QUEUE_SIZE:
@@ -592,7 +593,7 @@ class CacheProcess extends AbstractUnixProcess
                             'reserve' => isset($this->reserveJob[$queueName]) ? count($this->reserveJob[$queueName]) : 0,
                             'bury'    => isset($this->buryJob[$queueName]) ? count($this->buryJob[$queueName])  :0,
                         ];
-                        $replyPackage->setValue($return);
+                        $replayData = $return;
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_JOB:
@@ -611,7 +612,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->buryJob[$queueName]);
                         }
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_READY_JOB:
@@ -624,7 +625,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->readyJob[$queueName]);
                         }
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_RESERVE_JOB:
@@ -637,7 +638,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->reserveJob[$queueName]);
                         }
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_BURY_JOB:
@@ -650,7 +651,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->buryJob[$queueName]);
                         }
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_FLUSH_DELAY_JOB:
@@ -663,7 +664,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->delayJob[$queueName]);
                         }
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_RELEASE_JOB:
@@ -681,7 +682,7 @@ class CacheProcess extends AbstractUnixProcess
 
                         // 没有该任务
                         if (!$job){
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                             break;
                         }
                         $job->setDelay($delay);
@@ -695,7 +696,7 @@ class CacheProcess extends AbstractUnixProcess
                         /** @var $processConfig CacheProcessConfig */
                         $processConfig = $this->getConfig();
                         if ($job->getReleaseTimes() > $processConfig->getQueueMaxReleaseTimes()){
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                             break;
                         }
 
@@ -710,7 +711,7 @@ class CacheProcess extends AbstractUnixProcess
                             $this->readyJob[$queueName][$jobKey] = $job;
                         }
 
-                        $replyPackage->setValue($jobId);
+                        $replayData = $jobId;
                         break;
                     }
                 case $fromPackage::ACTION_RESERVE_JOB:
@@ -724,7 +725,7 @@ class CacheProcess extends AbstractUnixProcess
                              ?? $this->buryJob[$queueName][$jobId];
 
                         if (!$job){
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                             break;
                         }
 
@@ -736,7 +737,7 @@ class CacheProcess extends AbstractUnixProcess
                         unset($this->delayJob[$queueName][$jobId]);
                         unset($this->buryJob[$queueName][$jobId]);
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_BURY_JOB:
@@ -757,7 +758,7 @@ class CacheProcess extends AbstractUnixProcess
                         unset($this->delayJob[$queueName][$jobKey]);
                         unset($this->reserveJob[$queueName][$jobKey]);
 
-                        $replyPackage->setValue(true);
+                        $replayData = true;
                         break;
                     }
                 case $fromPackage::ACTION_GET_BURY_JOB:
@@ -770,7 +771,7 @@ class CacheProcess extends AbstractUnixProcess
                             $job = null;
                         }
 
-                        $replyPackage->setValue($job);
+                        $replayData = $job;
                         break;
                     }
                 case $fromPackage::ACTION_KICK_JOB:
@@ -785,9 +786,9 @@ class CacheProcess extends AbstractUnixProcess
                             $readyJob = $this->buryJob[$queueName][$jobKey];
                             unset($this->buryJob[$queueName][$jobKey]);
                             $this->readyJob[$queueName][$jobKey] = $readyJob;
-                            $replyPackage->setValue(true);
+                            $replayData = true;
                         }else{
-                            $replyPackage->setValue(false);
+                            $replayData = false;
                         }
                         break;
 
@@ -795,7 +796,7 @@ class CacheProcess extends AbstractUnixProcess
 
             }
         }
-        return $replyPackage;
+        return $replayData;
     }
 
     /**

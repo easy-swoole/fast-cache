@@ -364,7 +364,7 @@ class CacheProcess extends AbstractUnixProcess
                     {
                         $replayData = false;
                         $key = $fromPackage->getKey();
-                        $ttl = $fromPackage->getOption($fromPackage::OPTIONS_TTL);
+                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
                         // 不能给当前没有的Key设置TTL
                         if (array_key_exists($key, $this->splArray)) {
                             if (!is_null($ttl)) {

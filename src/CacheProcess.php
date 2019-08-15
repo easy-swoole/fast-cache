@@ -354,6 +354,10 @@ class CacheProcess extends AbstractUnixProcess
                         $replayData = true;
                         $this->ttlKeys = [];  // 同时移除全部TTL时间
                         $this->splArray = new SplArray();
+                        $this->buryJob = [];
+                        $this->readyJob = [];
+                        $this->delayJob = [];
+                        $this->reserveJob = [];
                         break;
                     }
                 case $fromPackage::ACTION_EXPIRE:

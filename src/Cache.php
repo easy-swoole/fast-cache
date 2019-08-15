@@ -156,7 +156,7 @@ class Cache
             return false;
         }
         $com = new Package();
-        $com->setCommand('set');
+        $com->setCommand($com::ACTION_SET);
         $com->setValue($value);
         $com->setKey($key);
         $com->setOption($com::ACTION_TTL, $ttl);
@@ -175,7 +175,7 @@ class Cache
             return null;
         }
         $com = new Package();
-        $com->setCommand($com::ACTION_SET);
+        $com->setCommand($com::ACTION_GET);
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }

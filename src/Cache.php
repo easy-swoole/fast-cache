@@ -881,6 +881,8 @@ class Cache
             $ret = unserialize(Protocol::unpack($ret));
             if ($ret instanceof Package) {
                 return $ret->getValue();
+            }else {
+                return $ret;
             }
         }
         return null;

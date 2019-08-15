@@ -50,9 +50,21 @@ class SetTest extends TestCase
 
         $res = Cache::getInstance()->expire('siam_set', 3);
         $this->assertEquals(true, $res);
+
+        // 测试再取出 值是否变化
+        $info = Cache::getInstance()->get('siam_set');
+        $this->assertEquals('easyswoole', $info);
+        sleep(4);
+        // 是否还在
+        $info = Cache::getInstance()->get('siam_set');
+        $this->assertEquals(null, $info);
     }
     public function testPersist()
     {
+
+        $res = Cache::getInstance()->set('siam_set', 'easyswoole');
+        $this->assertEquals(true, $res);
+        
         $res = Cache::getInstance()->persist('siam_set');
         $this->assertEquals(true, $res);
     }

@@ -13,6 +13,7 @@ class Package
 {
     protected $command;
     protected $value;
+    protected $field;
     protected $key;
     protected $options = [];
 
@@ -53,6 +54,11 @@ class Package
 
     const ACTION_FLUSH = -1;
 
+    const ACTION_HSET = 41;
+    const ACTION_HGET = 42;
+    const ACTION_HDEL = 43;
+    const ACTION_HFLUSH = 44;
+    const ACTION_HKEYS = 45;
 
     /**
      * @return mixed
@@ -137,5 +143,18 @@ class Package
     public function setOptions(array $options): void
     {
         $this->options = $options;
+    }
+
+    /**
+     * @param string $field
+     */
+    public function setField($field): void
+    {
+        $this->field = $field;
+    }
+
+    public function getField()
+    {
+        return $this->field;
     }
 }

@@ -932,4 +932,67 @@ class Cache
             throw new RuntimeError('you can not modify configure after init process check');
         }
     }
+
+    function hset($key, $field, $value, ?int $ttl = null, float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSET);
+        $com->setValue($value);
+        $com->setField($field);
+        $com->setKey($key);
+        $com->setOption($com::ACTION_TTL, $ttl);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hget($key, $field=null, float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return null;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HGET);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hdel($key, $field=null, float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HDEL);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hflush(float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HFLUSH);
+        $this->broadcast($com, $timeout);
+        return true;
+    }
+
+    function hkeys(float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HKEYS);
+        $keys = $this->broadcast($com, $timeout);
+        array_walk_recursive($keys, function($value) use (&$result) {
+            $result[] = $value;
+        });
+        return $result;
+    }
 }

@@ -870,7 +870,6 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 case $fromPackage::ACTION_HKEYS:
                     {
-                        var_dump($this->hashMap);
                         $replayData = array_keys($this->hashMap);
                     }
 

@@ -62,6 +62,12 @@ class CacheProcess extends AbstractUnixProcess
     protected $buryJob = [];
 
     /**
+     * hash相关
+     * @var array
+     */
+    protected $hashMap = [];
+
+    /**
      * 进程初始化并开始监听Socket
      * @param $args
      * @throws Exception
@@ -87,6 +93,7 @@ class CacheProcess extends AbstractUnixProcess
                     $this->delayJob   = $ret->getDelayJob();
                     $this->reserveJob = $ret->getReserveJob();
                     $this->buryJob    = $ret->getBuryJob();
+                    $this->hashMap    = $ret->getHashMap();
                 }
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
@@ -107,7 +114,7 @@ class CacheProcess extends AbstractUnixProcess
                     $data->setReserveJob($this->reserveJob);
                     $data->setDelayJob($this->delayJob);
                     $data->setBuryJob($this->buryJob);
-
+                    $data->setHashMap($this->hashMap);
                     call_user_func($processConfig->getOnTick(), $data,$processConfig);
                 } catch (Throwable $throwable) {
                     $this->onException($throwable);
@@ -244,7 +251,7 @@ class CacheProcess extends AbstractUnixProcess
                 $data->setReserveJob($this->reserveJob);
                 $data->setDelayJob($this->delayJob);
                 $data->setBuryJob($this->buryJob);
-
+                $data->setHashMap($this->buryJob);
                 call_user_func($onShutdown, $data,$this->getConfig());
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
@@ -726,7 +733,7 @@ class CacheProcess extends AbstractUnixProcess
                         $jobId     = "_".$job->getJobId();
 
                         $job = $this->readyJob[$queueName][$jobId] ?? $this->delayJob[$queueName][$jobId]
-                             ?? $this->buryJob[$queueName][$jobId];
+                            ?? $this->buryJob[$queueName][$jobId];
 
                         if (!$job){
                             $replayData = false;
@@ -796,6 +803,102 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
 
+                    }
+                case $fromPackage::ACTION_HSET:
+                    {
+                        $replayData = true;
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        $value = $fromPackage->getValue();
+
+                        // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
+                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
+                        if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
+                            if ($ttl !== null) {
+                                $this->ttlKeys[$key] = time() + $ttl;
+                            }
+                        }
+
+                        if (empty($field) || empty($value)) {
+                            $replayData = false;
+                        } else {
+                            $this->hashMap[$key][$field] = $value;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HGET:
+                    {
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
+                        if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
+                            unset($this->ttlKeys[$key]);
+                            $this->splArray->unset($key);
+                            $replayData = null;
+                        } else {
+                            if (empty($key)) {
+                                $replayData = null;
+                            } elseif (empty($field)) {
+                                $replayData = $this->hashMap[$key];
+                            } else {
+                                $replayData = $this->hashMap[$key][$field];
+                            }
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HDEL:
+                    {
+                        $replayData = true;
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        unset($this->ttlKeys[$key]); // 同时移除TTL
+                        if (empty($key)) {
+                            $replayData = false;
+                        } else if (empty($field)) {
+                            unset($this->hashMap[$key]);
+                        } else {
+                            unset($this->hashMap[$key][$field]);
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HFLUSH:
+                    {
+                        foreach ($this->hashMap as $key => $val) {
+                            unset($this->ttlKeys[$key]);
+                        }
+                        $this->hashMap = [];
+                        break;
+                    }
+                case $fromPackage::ACTION_HKEYS:
+                    {
+                        $replayData=null;
+                        $key = $fromPackage->getKey();
+                        if (!empty($this->hashMap[$key])) {
+                            $replayData = array_keys($this->hashMap[$key]);
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HSCAN:
+                    {
+                        $replayData=null;
+                        $key = $fromPackage->getKey();
+                        $limit = $fromPackage->getLimit();
+                        $cursor = $fromPackage->getCursor();
+                        if (!empty($this->hashMap[$key])) {
+                            $replayData = array_slice($this->hashMap[$key], $cursor, $limit);
+                            if (count($replayData) < $limit) {
+                                $replayData = [
+                                    'data' => $replayData,
+                                    'cursor' => 0
+                                ];
+                            } else {
+                                $replayData  = [
+                                    'data' => $replayData,
+                                    'cursor' => $cursor+$limit
+                                ];
+                            }
+                        }
+                        break;
                     }
 
             }

@@ -17,6 +17,7 @@ class SyncData
     protected $delayJob = [];
     protected $reserveJob = [];
     protected $buryJob = [];
+    protected $hashMap = [];
 
     /**
      * @return mixed
@@ -49,7 +50,7 @@ class SyncData
     {
         $this->queueArray = $queueArray;
     }
-	
+
     /**
      * @return array
      */
@@ -146,5 +147,20 @@ class SyncData
         $this->buryJob = $buryJob;
     }
 
+    /**
+     * @param array $hashMap
+     */
+    public function setHashMap(array $hashMap): void
+    {
+        $this->hashMap = $hashMap;
+    }
+
+    /**
+     * @return array
+     */
+    public function getHashMap(): array
+    {
+        return $this->hashMap;
+    }
 
 }

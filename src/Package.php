@@ -13,7 +13,10 @@ class Package
 {
     protected $command;
     protected $value;
+    protected $field;
     protected $key;
+    protected $cursor;
+    protected $limit;
     protected $options = [];
 
     const ACTION_SET = 11;
@@ -53,6 +56,12 @@ class Package
 
     const ACTION_FLUSH = -1;
 
+    const ACTION_HSET = 41;
+    const ACTION_HGET = 42;
+    const ACTION_HDEL = 43;
+    const ACTION_HFLUSH = 44;
+    const ACTION_HKEYS = 45;
+    const ACTION_HSCAN = 46;
 
     /**
      * @return mixed
@@ -137,5 +146,38 @@ class Package
     public function setOptions(array $options): void
     {
         $this->options = $options;
+    }
+
+    /**
+     * @param string $field
+     */
+    public function setField($field): void
+    {
+        $this->field = $field;
+    }
+
+    public function getField()
+    {
+        return $this->field;
+    }
+
+    public function setCursor($cursor): void
+    {
+        $this->cursor = $cursor;
+    }
+
+    public function getCursor()
+    {
+        return $this->cursor;
+    }
+
+    public function setLimit($limit): void
+    {
+        $this->limit = $limit;
+    }
+
+    public function getLimit()
+    {
+        return $this->limit;
     }
 }

@@ -982,17 +982,14 @@ class Cache
         return true;
     }
 
-    function hkeys(float $timeout = 1.0)
+    function hkeys($key, float $timeout = 1.0)
     {
         if ($this->processNum <= 0) {
             return false;
         }
         $com = new Package();
         $com->setCommand($com::ACTION_HKEYS);
-        $keys = $this->broadcast($com, $timeout);
-        array_walk_recursive($keys, function($value) use (&$result) {
-            $result[] = $value;
-        });
-        return $result;
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 }

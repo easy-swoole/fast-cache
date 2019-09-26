@@ -806,7 +806,7 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 case $fromPackage::ACTION_HSET:
                     {
-                        $replayData = 1;
+                        $replayData = true;
                         $key = $fromPackage->getKey();
                         $field = $fromPackage->getField();
                         $value = $fromPackage->getValue();
@@ -835,14 +835,14 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->ttlKeys[$key]);
                             $this->splArray->unset($key);
                             $replayData = null;
-                        }
-
-                        if (empty($key) || empty($this->hashMap[$key])) {
-                            $replayData = null;
-                        } else if (empty($field)) {
-                            $replayData = $this->hashMap[$key];
                         } else {
-                            $replayData = $this->hashMap[$key][$field];
+                            if (empty($key)) {
+                                $replayData = null;
+                            } elseif (empty($field)) {
+                                $replayData = $this->hashMap[$key];
+                            } else {
+                                $replayData = $this->hashMap[$key][$field];
+                            }
                         }
                         break;
                     }
@@ -852,7 +852,7 @@ class CacheProcess extends AbstractUnixProcess
                         $key = $fromPackage->getKey();
                         $field = $fromPackage->getField();
                         unset($this->ttlKeys[$key]); // 同时移除TTL
-                        if (empty($key) || empty($this->hashMap[$key])) {
+                        if (empty($key)) {
                             $replayData = false;
                         } else if (empty($field)) {
                             unset($this->hashMap[$key]);
@@ -870,7 +870,11 @@ class CacheProcess extends AbstractUnixProcess
                     }
                 case $fromPackage::ACTION_HKEYS:
                     {
-                        $replayData = array_keys($this->hashMap);
+                        $replayData=null;
+                        $key = $fromPackage->getKey();
+                        if (!empty($this->hashMap[$key])) {
+                            $replayData = array_keys($this->hashMap[$key]);
+                        }
                     }
 
             }

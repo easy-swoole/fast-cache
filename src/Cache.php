@@ -992,4 +992,17 @@ class Cache
         $com->setKey($key);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
+
+    function hscan($key, $cursor=0, $limit=10, float $timeout = 1.0)
+    {
+        if ($this->processNum <= 0) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSCAN);
+        $com->setKey($key);
+        $com->setCursor($cursor);
+        $com->setLimit($limit);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
 }

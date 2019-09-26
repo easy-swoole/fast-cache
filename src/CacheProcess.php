@@ -867,6 +867,7 @@ class CacheProcess extends AbstractUnixProcess
                             unset($this->ttlKeys[$key]);
                         }
                         $this->hashMap = [];
+                        break;
                     }
                 case $fromPackage::ACTION_HKEYS:
                     {
@@ -875,6 +876,29 @@ class CacheProcess extends AbstractUnixProcess
                         if (!empty($this->hashMap[$key])) {
                             $replayData = array_keys($this->hashMap[$key]);
                         }
+                        break;
+                    }
+                case $fromPackage::ACTION_HSCAN:
+                    {
+                        $replayData=null;
+                        $key = $fromPackage->getKey();
+                        $limit = $fromPackage->getLimit();
+                        $cursor = $fromPackage->getCursor();
+                        if (!empty($this->hashMap[$key])) {
+                            $replayData = array_slice($this->hashMap[$key], $cursor, $limit);
+                            if (count($replayData) < $limit) {
+                                $replayData = [
+                                    'data' => $replayData,
+                                    'cursor' => 0
+                                ];
+                            } else {
+                                $replayData  = [
+                                    'data' => $replayData,
+                                    'cursor' => $cursor+$limit
+                                ];
+                            }
+                        }
+                        break;
                     }
 
             }

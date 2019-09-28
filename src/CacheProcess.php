@@ -900,7 +900,24 @@ class CacheProcess extends AbstractUnixProcess
                         }
                         break;
                     }
-
+                case $fromPackage::ACTION_HSETNX:
+                    {
+                        $replayData = true;
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        $value = $fromPackage->getValue();
+                        // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
+                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
+                        if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
+                            if ($ttl !== null) {
+                                $this->ttlKeys[$key] = time() + $ttl;
+                            }
+                        }
+                        if (empty($this->hashMap[$key]) || empty($this->hashMap[$key][$value])) {
+                            $this->hashMap[$key][$field] = $value;
+                        }
+                        break;
+                    }
             }
         }
         return $replayData;

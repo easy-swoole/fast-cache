@@ -1005,4 +1005,17 @@ class Cache
         $com->setLimit($limit);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
+
+    function hsetnx($key, $field, $value, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSETNX);
+        $com->setKey($key);
+        $com->setField($field);
+        $com->setValue($value);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
 }

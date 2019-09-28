@@ -62,6 +62,7 @@ class Package
     const ACTION_HFLUSH = 44;
     const ACTION_HKEYS = 45;
     const ACTION_HSCAN = 46;
+    const ACTION_HSETNX = 47;
 
     /**
      * @return mixed

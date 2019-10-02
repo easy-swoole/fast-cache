@@ -1018,4 +1018,84 @@ class Cache
         $com->setValue($value);
         return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
+
+    function hExists($key, $field, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HEXISTS);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hLen($key, float $timeout = 1.0) {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HLEN);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hIncrby($key, $field, $value, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HINCRBY);
+        $com->setKey($key);
+        $com->setField($field);
+        $com->setValue($value);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hMset($key, $fieldValues, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HMSET);
+        $com->setKey($key);
+        $com->setFieldValues($fieldValues);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hMget($key, $fields, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HMGET);
+        $com->setKey($key);
+        $com->setFields($fields);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hVals($key, float $timeout = 1.0)
+    {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HVALS);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hGetAll($key, float $timeout = 1.0) {
+        if ($this->processNum <=0 ) {
+            return false;
+        }
+        $com = new Package();
+        $com->setCommand($com::ACTION_HGETALL);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
 }

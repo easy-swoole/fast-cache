@@ -810,15 +810,6 @@ class CacheProcess extends AbstractUnixProcess
                         $key = $fromPackage->getKey();
                         $field = $fromPackage->getField();
                         $value = $fromPackage->getValue();
-
-                        // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
-                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
-                        if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
-                            if ($ttl !== null) {
-                                $this->ttlKeys[$key] = time() + $ttl;
-                            }
-                        }
-
                         if (empty($field) || empty($value)) {
                             $replayData = false;
                         } else {
@@ -830,19 +821,12 @@ class CacheProcess extends AbstractUnixProcess
                     {
                         $key = $fromPackage->getKey();
                         $field = $fromPackage->getField();
-                        // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
-                        if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
-                            unset($this->ttlKeys[$key]);
-                            $this->splArray->unset($key);
+                        if (empty($key)) {
                             $replayData = null;
+                        } elseif (empty($field)) {
+                            $replayData = $this->hashMap[$key];
                         } else {
-                            if (empty($key)) {
-                                $replayData = null;
-                            } elseif (empty($field)) {
-                                $replayData = $this->hashMap[$key];
-                            } else {
-                                $replayData = $this->hashMap[$key][$field];
-                            }
+                            $replayData = $this->hashMap[$key][$field];
                         }
                         break;
                     }
@@ -906,15 +890,81 @@ class CacheProcess extends AbstractUnixProcess
                         $key = $fromPackage->getKey();
                         $field = $fromPackage->getField();
                         $value = $fromPackage->getValue();
-                        // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
-                        $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
-                        if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
-                            if ($ttl !== null) {
-                                $this->ttlKeys[$key] = time() + $ttl;
-                            }
-                        }
                         if (empty($this->hashMap[$key]) || empty($this->hashMap[$key][$value])) {
                             $this->hashMap[$key][$field] = $value;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HEXISTS:
+                    {
+                        $replayData = false;
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        if (isset($this->hashMap[$key][$field])) {
+                            $replayData = true;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HLEN:
+                    {
+                        $replayData = 0;
+                        $key = $fromPackage->getKey();
+                        if (isset($this->hashMap[$key])) {
+                            $replayData = count($this->hashMap[$key]);
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HINCRBY:
+                    {
+                        $replayData = true;
+                        $key = $fromPackage->getKey();
+                        $field = $fromPackage->getField();
+                        $value = $fromPackage->getValue();
+
+                        if (isset($this->hashMap[$key][$field])) {
+                            if (is_numeric($this->hashMap[$key][$field])) {
+                                $this->hashMap[$key][$field] += $value;
+                            } else {
+                                $replayData = false;
+                            }
+                        } else {
+                            $this->hashMap[$key][$field] = $value;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HMSET:
+                    {
+                        $replayData = true;
+                        $key = $fromPackage->getKey();
+                        $fieldValues = $fromPackage->getFieldValues();
+                        foreach ($fieldValues as $field => $value) {
+                            $this->hashMap[$key][$field] = $value;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HMGET:
+                    {
+                        $replayData = [];
+                        $key = $fromPackage->getKey();
+                        $fields = $fromPackage->getFields();
+                        foreach ($fields as $field) {
+                            $replayData[$field] = $this->hashMap[$key][$field]??null;
+                        }
+                        break;
+                    }
+                case $fromPackage::ACTION_HVALS:
+                    {
+                        $key = $fromPackage->getKey();
+                        $replayData = array_values($this->hashMap[$key]??[]);
+                        break;
+                    }
+                case $fromPackage::ACTION_HGETALL:
+                    {
+                        $replayData = [];
+                        $key = $fromPackage->getKey();
+                        foreach ($this->hashMap[$key]??[] as $field => $value) {
+                            $replayData[] = $field;
+                            $replayData[] = $value;
                         }
                         break;
                     }

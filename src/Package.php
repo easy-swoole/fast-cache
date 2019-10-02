@@ -14,9 +14,11 @@ class Package
     protected $command;
     protected $value;
     protected $field;
+    protected $fields;
     protected $key;
     protected $cursor;
     protected $limit;
+    protected $fieldValues;
     protected $options = [];
 
     const ACTION_SET = 11;
@@ -63,6 +65,13 @@ class Package
     const ACTION_HKEYS = 45;
     const ACTION_HSCAN = 46;
     const ACTION_HSETNX = 47;
+    const ACTION_HEXISTS = 48;
+    const ACTION_HLEN = 49;
+    const ACTION_HINCRBY = 50;
+    const ACTION_HMSET = 51;
+    const ACTION_HMGET = 52;
+    const ACTION_HVALS = 53;
+    const ACTION_HGETALL = 54;
 
     /**
      * @return mixed
@@ -180,5 +189,25 @@ class Package
     public function getLimit()
     {
         return $this->limit;
+    }
+
+    public function setFieldValues(array $fieldValues): void
+    {
+        $this->fieldValues = $fieldValues;
+    }
+
+    public function getFieldValues(): array
+    {
+        return $this->fieldValues;
+    }
+
+    public function setFields(array $fields): void
+    {
+        $this->fields = $fields;
+    }
+
+    public function getFields(): array
+    {
+        return $this->fields;
     }
 }

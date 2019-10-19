@@ -18,7 +18,7 @@
     ],
     "require": {
         "php": ">=7.1.0",
-        "easyswoole/component": "^1.4",
+        "easyswoole/component": "^2.0",
         "easyswoole/spl": "^1.1"
     },
     "require-dev": {
@@ -27,7 +27,11 @@
     },
     "autoload": {
         "psr-4": {
-            "EasySwoole\\FastCache\\": "src/",
+            "EasySwoole\\FastCache\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
             "EasySwoole\\FastCache\\Tests\\": "tests/"
         }
     }

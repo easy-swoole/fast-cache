@@ -198,8 +198,4 @@ class CacheProcessConfig extends UnixProcessConfig
     {
         $this->queueMaxReleaseTimes = $queueMaxReleaseTimes;
     }
-
-
-
-
 }

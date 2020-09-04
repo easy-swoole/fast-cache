@@ -617,7 +617,7 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
-    public function jobQueues(float $timeout = 1.0):array
+    public function jobQueues(float $timeout = 1.0):?array
     {
         if ($this->processNum <= 0) {
             return null;

@@ -19,9 +19,9 @@ class CacheProcess extends AbstractUnixProcess
 {
     /**
      * Spl数组存放当前的缓存内容
-     * @var SplArray
+     * @var array
      */
-    protected $splArray;
+    protected $splArray = [];
 
     /**
      * 存放Spl队列
@@ -77,12 +77,10 @@ class CacheProcess extends AbstractUnixProcess
         /** @var $processConfig CacheProcessConfig */
         $processConfig = $this->getConfig();
         ini_set('memory_limit',$processConfig->getMaxMem());
-        $this->splArray = new SplArray();
-
         // 进程启动时执行
         if (is_callable($processConfig->getOnStart())) {
             try {
-                $ret = call_user_func($processConfig->getOnStart(),$processConfig);
+                $ret = call_user_func($processConfig->getOnStart(),$this);
                 if ($ret instanceof SyncData) {
                     $this->splArray   = $ret->getArray();
                     $this->queueArray = $ret->getQueueArray();
@@ -104,18 +102,7 @@ class CacheProcess extends AbstractUnixProcess
         if (is_callable($processConfig->getOnTick())) {
             $this->addTick($processConfig->getTickInterval(), function () use ($processConfig) {
                 try {
-                    $data = new SyncData();
-                    $data->setArray($this->splArray);
-                    $data->setQueueArray($this->queueArray);
-                    $data->setTtlKeys($this->ttlKeys);
-                    // queue 支持
-                    $data->setJobIds($this->jobIds);
-                    $data->setReadyJob($this->readyJob);
-                    $data->setReserveJob($this->reserveJob);
-                    $data->setDelayJob($this->delayJob);
-                    $data->setBuryJob($this->buryJob);
-                    $data->setHashMap($this->hashMap);
-                    call_user_func($processConfig->getOnTick(), $data,$processConfig);
+                    call_user_func($processConfig->getOnTick(), $this->getSyncData(),$this);
                 } catch (Throwable $throwable) {
                     $this->onException($throwable);
                 }
@@ -241,22 +228,28 @@ class CacheProcess extends AbstractUnixProcess
         $onShutdown = $this->getConfig()->getOnShutdown();
         if (is_callable($onShutdown)) {
             try {
-                $data = new SyncData();
-                $data->setArray($this->splArray);
-                $data->setQueueArray($this->queueArray);
-                $data->setTtlKeys($this->ttlKeys);
-                // queue 支持
-                $data->setJobIds($this->jobIds);
-                $data->setReadyJob($this->readyJob);
-                $data->setReserveJob($this->reserveJob);
-                $data->setDelayJob($this->delayJob);
-                $data->setBuryJob($this->buryJob);
-                $data->setHashMap($this->buryJob);
-                call_user_func($onShutdown, $data,$this->getConfig());
+                call_user_func($onShutdown, $this->getSyncData(),$this);
             } catch (Throwable $throwable) {
                 $this->onException($throwable);
             }
         }
+    }
+
+
+    protected function getSyncData():SyncData
+    {
+        $data = new SyncData();
+        $data->setArray($this->splArray);
+        $data->setQueueArray($this->queueArray);
+        $data->setTtlKeys($this->ttlKeys);
+        // queue 支持
+        $data->setJobIds($this->jobIds);
+        $data->setReadyJob($this->readyJob);
+        $data->setReserveJob($this->reserveJob);
+        $data->setDelayJob($this->delayJob);
+        $data->setBuryJob($this->buryJob);
+        $data->setHashMap($this->buryJob);
+        return $data;
     }
 
     /**

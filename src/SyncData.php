@@ -4,11 +4,10 @@
 namespace EasySwoole\FastCache;
 
 
-use EasySwoole\Spl\SplArray;
 
 class SyncData
 {
-    protected $array;
+    protected $array = [];
     protected $queueArray = [];
     protected $ttlKeys = [];
     // queue支持
@@ -22,7 +21,7 @@ class SyncData
     /**
      * @return mixed
      */
-    public function getArray():SplArray
+    public function getArray():array
     {
         return $this->array;
     }
@@ -30,7 +29,7 @@ class SyncData
     /**
      * @param mixed $array
      */
-    public function setArray(SplArray $array): void
+    public function setArray(array $array): void
     {
         $this->array = $array;
     }

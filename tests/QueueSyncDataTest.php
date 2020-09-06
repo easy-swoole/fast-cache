@@ -44,28 +44,28 @@ class QueueSyncDataTest  extends TestCase
     /**
      * 设置数据到fast-cache中
      */
-    // function testSet()
-    // {
-    //     $job = new Job();
-    //     $job->setQueue('siam_test_sync');
-    //     $job->setData("测试");
-    //     $jobId = Cache::getInstance()->putJob($job);
-    //
-    //     $this->assertIsInt($jobId);
-    //
-    //     $job = new Job();
-    //     $job->setQueue('siam_test_sync');
-    //     $job->setData("测试延迟");
-    //     $job->setDelay(3000);
-    //     $jobId = Cache::getInstance()->putJob($job);
-    //     $this->assertIsInt($jobId);
-    //
-    //     $job = new Job();
-    //     $job->setQueue('siam_test_sync');
-    //     $job->setData("测试bury");
-    //     $jobId = Cache::getInstance()->putJob($job);
-    //     $job->setJobId($jobId);
-    //     Cache::getInstance()->buryJob($job);
-    // }
+//     function testSet()
+//     {
+//         $job = new Job();
+//         $job->setQueue('siam_test_sync');
+//         $job->setData("测试");
+//         $jobId = Cache::getInstance()->putJob($job);
+//
+//         $this->assertIsInt($jobId);
+//
+//         $job = new Job();
+//         $job->setQueue('siam_test_sync');
+//         $job->setData("测试延迟");
+//         $job->setDelay(3000);
+//         $jobId = Cache::getInstance()->putJob($job);
+//         $this->assertIsInt($jobId);
+//
+//         $job = new Job();
+//         $job->setQueue('siam_test_sync');
+//         $job->setData("测试bury");
+//         $jobId = Cache::getInstance()->putJob($job);
+//         $job->setJobId($jobId);
+//         Cache::getInstance()->buryJob($job);
+//     }
 
 }

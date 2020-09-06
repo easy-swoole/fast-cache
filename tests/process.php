@@ -3,13 +3,14 @@ require 'vendor/autoload.php';
 
 use EasySwoole\FastCache\Cache;
 use EasySwoole\FastCache\CacheProcessConfig;
+use EasySwoole\FastCache\CacheProcess;
 use EasySwoole\FastCache\SyncData;
 use EasySwoole\Utility\File;
 
 
 // 设置落地
 Cache::getInstance()->setTickInterval(5 * 1000);//设置定时频率
-Cache::getInstance()->setOnTick(function (SyncData $SyncData, CacheProcessConfig $cacheProcessConfig) {
+Cache::getInstance()->setOnTick(function (SyncData $SyncData, CacheProcess $cacheProcessConfig) {
     $data = [
         'data'  => $SyncData->getArray(),
         'queue' => $SyncData->getQueueArray(),
@@ -26,7 +27,7 @@ Cache::getInstance()->setOnTick(function (SyncData $SyncData, CacheProcessConfig
 });
 
 // 启动时将存回的文件重新写入
-Cache::getInstance()->setOnStart(function (CacheProcessConfig $cacheProcessConfig) {
+Cache::getInstance()->setOnStart(function (CacheProcess $cacheProcessConfig) {
     $path = __DIR__ . '/FastCacheData/' . $cacheProcessConfig->getProcessName();
     if(is_file($path)){
         $data = unserialize(file_get_contents($path));
@@ -45,7 +46,7 @@ Cache::getInstance()->setOnStart(function (CacheProcessConfig $cacheProcessConfi
 });
 
 // 在守护进程时,php easyswoole stop 时会调用,落地数据
-Cache::getInstance()->setOnShutdown(function (SyncData $SyncData, CacheProcessConfig $cacheProcessConfig) {
+Cache::getInstance()->setOnShutdown(function (SyncData $SyncData, CacheProcess $cacheProcessConfig) {
     $data = [
         'data'  => $SyncData->getArray(),
         'queue' => $SyncData->getQueueArray(),

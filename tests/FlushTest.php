@@ -24,6 +24,7 @@ class FlushTest extends TestCase
         Cache::getInstance()->flush();
 
         $keys = Cache::getInstance()->keys();
+        
         $this->assertEquals([], $keys);
 
     }

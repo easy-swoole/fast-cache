@@ -18,13 +18,13 @@ use Throwable;
 class CacheProcess extends AbstractUnixProcess
 {
     /**
-     * Spl数组存放当前的缓存内容
+     * 数组存放当前的缓存内容
      * @var array
      */
-    protected $splArray = [];
+    protected $dataArray = [];
 
     /**
-     * 存放Spl队列
+     * 存放队列
      * @var array
      */
     protected $queueArray = [];
@@ -82,7 +82,7 @@ class CacheProcess extends AbstractUnixProcess
             try {
                 $ret = call_user_func($processConfig->getOnStart(), $this);
                 if ($ret instanceof SyncData) {
-                    $this->splArray = $ret->getArray();
+                    $this->dataArray = $ret->getArray();
                     $this->queueArray = $ret->getQueueArray();
                     $this->ttlKeys = $ret->getTtlKeys();
                     // queue 支持
@@ -121,7 +121,7 @@ class CacheProcess extends AbstractUnixProcess
                         foreach ($checkKeys as $ttlKey) {
                             $ttlExpire = $this->ttlKeys[$ttlKey];
                             if ($ttlExpire < time()) {
-                                unset($this->ttlKeys[$ttlKey], $this->splArray[$ttlKey]);
+                                unset($this->ttlKeys[$ttlKey], $this->dataArray[$ttlKey]);
                             }
                         }
                     }
@@ -205,18 +205,18 @@ class CacheProcess extends AbstractUnixProcess
      * 获取当前Spl数组
      * @return mixed
      */
-    public function getSplArray()
+    public function getDataArray()
     {
-        return $this->splArray;
+        return $this->dataArray;
     }
 
     /**
      * 设置当前Spl数组
-     * @param mixed $splArray
+     * @param mixed $dataArray
      */
-    public function setSplArray($splArray): void
+    public function setDataArray($dataArray): void
     {
-        $this->splArray = $splArray;
+        $this->dataArray = $dataArray;
     }
 
     /**
@@ -239,7 +239,7 @@ class CacheProcess extends AbstractUnixProcess
     protected function getSyncData(): SyncData
     {
         $data = new SyncData();
-        $data->setArray($this->splArray);
+        $data->setArray($this->dataArray);
         $data->setQueueArray($this->queueArray);
         $data->setTtlKeys($this->ttlKeys);
         // queue 支持
@@ -313,7 +313,7 @@ class CacheProcess extends AbstractUnixProcess
                             $this->ttlKeys[$key] = time() + $ttl;
                         }
                     }
-                    $this->splArray[$key] = $value;
+                    $this->dataArray[$key] = $value;
                     break;
                 }
                 case $fromPackage::ACTION_GET:
@@ -322,11 +322,11 @@ class CacheProcess extends AbstractUnixProcess
                     // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
                     if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
                         unset($this->ttlKeys[$key]);
-                        unset($this->splArray[$key]);
+                        unset($this->dataArray[$key]);
                         $replayData = null;
                     } else {
-                        if (isset($this->splArray[$fromPackage->getKey()])) {
-                            $replayData = $this->splArray[$fromPackage->getKey()];
+                        if (isset($this->dataArray[$fromPackage->getKey()])) {
+                            $replayData = $this->dataArray[$fromPackage->getKey()];
                         } else {
                             $replayData = null;
                         }
@@ -338,27 +338,27 @@ class CacheProcess extends AbstractUnixProcess
                 {
                     $replayData = true;
                     unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
-                    unset($this->splArray[$fromPackage->getKey()]);
+                    unset($this->dataArray[$fromPackage->getKey()]);
                     break;
                 }
                 case $fromPackage::ACTION_KEYS:
                 {
 //                    $key = $fromPackage->getKey();
-                    $keys = array_keys($this->splArray);
+                    $keys = array_keys($this->dataArray);
                     $time = time();
                     foreach ($this->ttlKeys as $ttlKey => $ttl) {
                         if ($ttl < $time) {
                             unset($keys[$ttlKey], $this->ttlKeys[$ttlKey]);  // 立刻释放过期的ttlKey
                         }
                     }
-                    $replayData = array_keys($this->splArray);
+                    $replayData = array_keys($this->dataArray);
                     break;
                 }
                 case $fromPackage::ACTION_FLUSH:
                 {
                     $replayData = true;
                     $this->ttlKeys = [];  // 同时移除全部TTL时间
-                    $this->splArray = [];
+                    $this->dataArray = [];
                     $this->buryJob = [];
                     $this->readyJob = [];
                     $this->delayJob = [];
@@ -371,7 +371,7 @@ class CacheProcess extends AbstractUnixProcess
                     $key = $fromPackage->getKey();
                     $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
                     // 不能给当前没有的Key设置TTL
-                    if (array_key_exists($key, $this->splArray)) {
+                    if (array_key_exists($key, $this->dataArray)) {
                         if (!is_null($ttl)) {
                             $this->ttlKeys[$key] = time() + $ttl;
                             $replayData = true;
@@ -394,7 +394,7 @@ class CacheProcess extends AbstractUnixProcess
                     $time = time();
 
                     // 不能查询当前没有的Key
-                    if (array_key_exists($key, $this->splArray) && array_key_exists($key, $this->ttlKeys)) {
+                    if (array_key_exists($key, $this->dataArray) && array_key_exists($key, $this->ttlKeys)) {
                         $expire = $this->ttlKeys[$key];
                         if ($expire > $time) {  // 有剩余时间时才会返回剩余ttl 否则返回null表示已经过期或未设置 不区分主动过期和key不存在的情况
                             $replayData = $expire - $time;

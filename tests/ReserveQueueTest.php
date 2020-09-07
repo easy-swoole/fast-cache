@@ -17,7 +17,7 @@ class ReserveQueueTest extends TestCase
         $job->setData('LuffyQAQ');
         $res = Cache::getInstance()->putJob($job);
 
-        $this->assertInternalType('int',$res);
+        $this->assertIsInt($res);
 
         $job->setJobId($res);
         return $job;

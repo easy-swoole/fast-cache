@@ -313,7 +313,7 @@ class CacheProcess extends AbstractUnixProcess
                             $this->ttlKeys[$key] = time() + $ttl;
                         }
                     }
-                    $this->splArray->set($key, $value);
+                    $this->splArray[$key] = $value;
                     break;
                 }
                 case $fromPackage::ACTION_GET:
@@ -322,10 +322,15 @@ class CacheProcess extends AbstractUnixProcess
                     // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
                     if (array_key_exists($key, $this->ttlKeys) && $this->ttlKeys[$key] < time()) {
                         unset($this->ttlKeys[$key]);
-                        $this->splArray->unset($key);
+                        unset($this->splArray[$key]);
                         $replayData = null;
                     } else {
-                        $replayData = $this->splArray->get($fromPackage->getKey());
+                        if (isset($this->splArray[$fromPackage->getKey()])) {
+                            $replayData = $this->splArray[$fromPackage->getKey()];
+                        } else {
+                            $replayData = null;
+                        }
+
                     }
                     break;
                 }
@@ -333,27 +338,27 @@ class CacheProcess extends AbstractUnixProcess
                 {
                     $replayData = true;
                     unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
-                    $this->splArray->unset($fromPackage->getKey());
+                    unset($this->splArray[$fromPackage->getKey()]);
                     break;
                 }
                 case $fromPackage::ACTION_KEYS:
                 {
-                    $key = $fromPackage->getKey();
-                    $keys = $this->splArray->keys($key);
+//                    $key = $fromPackage->getKey();
+                    $keys = array_keys($this->splArray);
                     $time = time();
                     foreach ($this->ttlKeys as $ttlKey => $ttl) {
                         if ($ttl < $time) {
                             unset($keys[$ttlKey], $this->ttlKeys[$ttlKey]);  // 立刻释放过期的ttlKey
                         }
                     }
-                    $replayData = $this->splArray->keys($key);
+                    $replayData = array_keys($this->splArray);
                     break;
                 }
                 case $fromPackage::ACTION_FLUSH:
                 {
                     $replayData = true;
                     $this->ttlKeys = [];  // 同时移除全部TTL时间
-                    $this->splArray = new SplArray();
+                    $this->splArray = [];
                     $this->buryJob = [];
                     $this->readyJob = [];
                     $this->delayJob = [];

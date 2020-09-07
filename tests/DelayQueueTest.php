@@ -17,7 +17,7 @@ class DelayQueueTest extends TestCase
         $job->setData('LuffyQAQ');
         $res = Cache::getInstance()->putJob($job);
 
-        $this->assertInternalType('int',$res);
+        $this->assertIsInt($res);
 
         $job->setJobId($res);
         $job->setDelay(30);

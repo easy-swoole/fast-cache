@@ -23,7 +23,6 @@ class Cache
 {
     use Singleton;
 
-    private $hashAttachServer = false;
     private $config;
 
     function __construct(?Config $config = null)

@@ -109,7 +109,7 @@ class Worker extends AbstractUnixProcess
                     /** @var Job $job */
                     foreach ($jobs as $jobKey => $job) {
                         // 取出时间 + 超时时间 < 当前时间 则放回ready
-                        if ($job->getReserveTime() + $processConfig->getQueueReserveTime() < time()) {
+                        if ($job->getDequeueTime() + $processConfig->getQueueReserveTime() < time()) {
                             $readyJob = $this->reserveJob[$queueName][$jobKey];
                             unset($this->reserveJob[$queueName][$jobKey]);
                             // 判断最大重发次数
@@ -347,7 +347,7 @@ class Worker extends AbstractUnixProcess
                         /** @var Job $job */
                         $job = array_shift($this->readyJob[$queueName]);
                         // 设置reserveTime 放到reserveJob队列
-                        $job->setReserveTime(time());
+                        $job->setDequeueTime(time());
                         $jobId = "_" . $job->getJobId();
                         $this->reserveJob[$queueName][$jobId] = $job;
                     } else {
@@ -596,7 +596,7 @@ class Worker extends AbstractUnixProcess
                         break;
                     }
 
-                    $job->setReserveTime(time());
+                    $job->setDequeueTime(time());
 
                     $this->reserveJob[$queueName][$jobId] = $job;
 

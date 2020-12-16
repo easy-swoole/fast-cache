@@ -11,7 +11,7 @@ class WorkerConfig extends UnixProcessConfig
     protected $backlog;
     protected $maxMem = '512M';
     protected $queueReserveTime = 60;
-    protected $queueMaxReleaseTimes = 10;
+    protected $queueMaxReleaseTimes = 3;
 
     /**
      * @return mixed

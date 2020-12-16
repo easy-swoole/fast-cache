@@ -33,6 +33,11 @@ class Cache
         $this->config = $config;
     }
 
+    function getConfig():Config
+    {
+        return $this->config;
+    }
+
 
     /**
      * 设置缓存
@@ -719,10 +724,20 @@ class Cache
      */
     function attachToServer(swoole_server $server)
     {
-        $list = $this->initProcess();
+        $list = $this->__initProcess();
         foreach ($list as $process) {
             $server->addProcess($process->getProcess());
         }
+    }
+
+    function __debug(Package $package,$workerIndex)
+    {
+        return $this->sendAndRecv($this->generateSocketByIndex($workerIndex), $package);
+    }
+
+    function __getWorkerIndex(string $key):int
+    {
+        return (base_convert(substr(md5($key), 0, 2), 16, 10) % $this->config->getWorkerNum());
     }
 
     /**
@@ -730,7 +745,7 @@ class Cache
      * @return array
      * @throws Exception
      */
-    public function initProcess(): array
+    public function __initProcess(): array
     {
         $this->hashAttachServer = true;
         $array = [];
@@ -752,8 +767,7 @@ class Cache
      */
     private function generateSocket($key): string
     {
-        $index = (base_convert(substr(md5($key), 0, 2), 16, 10) % $this->config->getWorkerNum());
-        return $this->generateSocketByIndex($index);
+        return $this->generateSocketByIndex($this->__getWorkerIndex($key));
     }
 
     /**

@@ -9,6 +9,7 @@ use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
 use EasySwoole\FastCache\Job;
 use EasySwoole\FastCache\Protocol\Package;
 use EasySwoole\FastCache\Protocol\Protocol;
+use Swoole\Coroutine;
 use Swoole\Coroutine\Socket;
 
 class Worker extends AbstractUnixProcess
@@ -73,64 +74,56 @@ class Worker extends AbstractUnixProcess
         /** @var $processConfig WorkerConfig */
         $processConfig = $this->getConfig();
         ini_set('memory_limit', $processConfig->getMaxMem());
-        // 过期Key自动回收(至少499ms执行一次保证1秒内执行2次过期判断)
-        $this->addTick(499, function () use ($processConfig) {
-            try {
-                if (!empty($this->ttlKeys)) {
-                    mt_srand();
-                    $keys = array_keys($this->ttlKeys);
-                    shuffle($keys);
-                    $checkKeys = array_slice($keys, 0, 100);  // 每次随机检查100个过期
-                    if (is_array($checkKeys) && count($checkKeys) > 0) {
-                        foreach ($checkKeys as $ttlKey) {
-                            $ttlExpire = $this->ttlKeys[$ttlKey];
-                            if ($ttlExpire < time()) {
+        Coroutine::create(function ()use($processConfig){
+            while (1){
+                try {
+                    if (!empty($this->ttlKeys)) {
+                        foreach ($this->ttlKeys as $ttlKey => $expire){
+                            if ($expire < time()) {
                                 unset($this->ttlKeys[$ttlKey], $this->dataArray[$ttlKey]);
                             }
                         }
                     }
-                }
-
-                // 检测消息队列可执行性
-                foreach ($this->delayJob as $queueName => $jobs) {
-                    /** @var Job $job */
-                    foreach ($jobs as $jobKey => $job) {
-                        // 是否可以执行
-                        if ($job->getNextDoTime() <= time()) {
-                            $canDo = $this->delayJob[$queueName][$jobKey];
-                            unset($this->delayJob[$queueName][$jobKey]);
-                            $this->readyJob[$queueName]["_" . $job->getJobId()] = $canDo;
-                        }
-                    }
-                }
-
-                // 检测保留任务是否超时
-                foreach ($this->reserveJob as $queueName => $jobs) {
-                    /** @var Job $job */
-                    foreach ($jobs as $jobKey => $job) {
-                        // 取出时间 + 超时时间 < 当前时间 则放回ready
-                        if ($job->getDequeueTime() + $processConfig->getJobReserveTime() < time()) {
-                            $readyJob = $this->reserveJob[$queueName][$jobKey];
-                            unset($this->reserveJob[$queueName][$jobKey]);
-                            // 判断最大重发次数
-                            $releaseTimes = $job->getReleaseTimes();
-                            if ($releaseTimes < $processConfig->getJobMaxReleaseTimes()) {
-                                $job->setReleaseTimes(++$releaseTimes);
-                                // 如果是延迟队列 更新nextDoTime
-                                if ($job->getDelay() > 0) {
-                                    $job->setNextDoTime(time() + $job->getDelay());
-                                }
-                                $this->readyJob[$queueName]["_" . $job->getJobId()] = $readyJob;
+                    // 检测消息队列可执行性
+                    foreach ($this->delayJob as $queueName => $jobs) {
+                        /** @var Job $job */
+                        foreach ($jobs as $jobKey => $job) {
+                            // 是否可以执行
+                            if ($job->getNextDoTime() <= time()) {
+                                $canDo = $this->delayJob[$queueName][$jobKey];
+                                unset($this->delayJob[$queueName][$jobKey]);
+                                $this->readyJob[$queueName]["_" . $job->getJobId()] = $canDo;
                             }
                         }
                     }
-                }
+                    // 检测保留任务是否超时
+                    foreach ($this->reserveJob as $queueName => $jobs) {
+                        /** @var Job $job */
+                        foreach ($jobs as $jobKey => $job) {
+                            // 取出时间 + 超时时间 < 当前时间 则放回ready
+                            if ($job->getDequeueTime() + $processConfig->getJobReserveTime() < time()) {
+                                $readyJob = $this->reserveJob[$queueName][$jobKey];
+                                unset($this->reserveJob[$queueName][$jobKey]);
+                                // 判断最大重发次数
+                                $releaseTimes = $job->getReleaseTimes();
+                                if ($releaseTimes < $processConfig->getJobMaxReleaseTimes()) {
+                                    $job->setReleaseTimes(++$releaseTimes);
+                                    // 如果是延迟队列 更新nextDoTime
+                                    if ($job->getDelay() > 0) {
+                                        $job->setNextDoTime(time() + $job->getDelay());
+                                    }
+                                    $this->readyJob[$queueName]["_" . $job->getJobId()] = $readyJob;
+                                }
+                            }
+                        }
+                    }
 
-            } catch (\Throwable $throwable) {
-                $this->onException($throwable);
+                } catch (\Throwable $throwable) {
+                    $this->onException($throwable);
+                }
+                Coroutine::sleep(0.49);
             }
         });
-
         parent::run($processConfig);
     }
 
@@ -169,13 +162,13 @@ class Worker extends AbstractUnixProcess
         $fromPackage = unserialize($commandPayload);
         if ($fromPackage instanceof Package) {
             switch ($fromPackage->getCommand()) {
-                case $fromPackage::ACTION_SET:
+                case Package::ACTION_SET:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
                     $value = $fromPackage->getValue();
                     // 按照redis的逻辑 当前key没有过期 set不会重置ttl 已过期则重新设置
-                    $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
+                    $ttl = $fromPackage->getOption(Package::ACTION_TTL);
                     if (!array_key_exists($key, $this->ttlKeys) || $this->ttlKeys[$key] < time()) {
                         if (!is_null($ttl)) {
                             $this->ttlKeys[$key] = time() + $ttl;
@@ -184,7 +177,7 @@ class Worker extends AbstractUnixProcess
                     $this->dataArray[$key] = $value;
                     break;
                 }
-                case $fromPackage::ACTION_GET:
+                case Package::ACTION_GET:
                 {
                     $key = $fromPackage->getKey();
                     // 取出之前需要先判断当前是否有ttl 如果有ttl设置并且已经过期 立刻删除key
@@ -192,24 +185,20 @@ class Worker extends AbstractUnixProcess
                         unset($this->ttlKeys[$key]);
                         unset($this->dataArray[$key]);
                         $replayData = null;
-                    } else {
-                        if (isset($this->dataArray[$fromPackage->getKey()])) {
-                            $replayData = $this->dataArray[$fromPackage->getKey()];
-                        } else {
-                            $replayData = null;
-                        }
-
+                    }
+                    if (isset($this->dataArray[$fromPackage->getKey()])) {
+                        $replayData = $this->dataArray[$fromPackage->getKey()];
                     }
                     break;
                 }
-                case $fromPackage::ACTION_UNSET:
+                case Package::ACTION_UNSET:
                 {
                     $replayData = true;
                     unset($this->ttlKeys[$fromPackage->getKey()]); // 同时移除TTL
                     unset($this->dataArray[$fromPackage->getKey()]);
                     break;
                 }
-                case $fromPackage::ACTION_KEYS:
+                case Package::ACTION_KEYS:
                 {
                     /** 检查一次过期数据 */
                     $time = time();
@@ -222,7 +211,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $keys;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH:
+                case Package::ACTION_FLUSH:
                 {
                     $replayData = true;
                     $this->ttlKeys = [];
@@ -233,11 +222,11 @@ class Worker extends AbstractUnixProcess
                     $this->reserveJob = [];
                     break;
                 }
-                case $fromPackage::ACTION_EXPIRE:
+                case Package::ACTION_EXPIRE:
                 {
                     $replayData = false;
                     $key = $fromPackage->getKey();
-                    $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
+                    $ttl = $fromPackage->getOption(Package::ACTION_TTL);
                     if (array_key_exists($key, $this->dataArray)) {
                         if (!is_null($ttl)) {
                             $this->ttlKeys[$key] = time() + $ttl;
@@ -247,14 +236,14 @@ class Worker extends AbstractUnixProcess
 
                     break;
                 }
-                case $fromPackage::ACTION_PERSISTS:
+                case Package::ACTION_PERSISTS:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
                     unset($this->ttlKeys[$key]);
                     break;
                 }
-                case $fromPackage::ACTION_TTL:
+                case Package::ACTION_TTL:
                 {
                     $replayData = null;
                     $key = $fromPackage->getKey();
@@ -269,7 +258,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_ENQUEUE:
+                case Package::ACTION_ENQUEUE:
                 {
                     $que = $this->initQueue($fromPackage->getKey());
                     $data = $fromPackage->getValue();
@@ -281,7 +270,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_DEQUEUE:
+                case Package::ACTION_DEQUEUE:
                 {
                     $que = $this->initQueue($fromPackage->getKey());
                     if ($que->isEmpty()) {
@@ -291,13 +280,13 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_QUEUE_SIZE:
+                case Package::ACTION_QUEUE_SIZE:
                 {
                     $que = $this->initQueue($fromPackage->getKey());
                     $replayData = $que->count();
                     break;
                 }
-                case $fromPackage::ACTION_UNSET_QUEUE:
+                case Package::ACTION_UNSET_QUEUE:
                 {
                     if (isset($this->queueArray[$fromPackage->getKey()])) {
                         unset($this->queueArray[$fromPackage->getKey()]);
@@ -307,18 +296,18 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_QUEUE_LIST:
+                case Package::ACTION_QUEUE_LIST:
                 {
                     $replayData = array_keys($this->queueArray);
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_QUEUE:
+                case Package::ACTION_FLUSH_QUEUE:
                 {
                     $this->queueArray = [];
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_PUT_JOB:
+                case Package::ACTION_PUT_JOB:
                 {
                     // 设置jobId 储存
                     /** @var Job $job */
@@ -340,7 +329,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $jobId;
                     break;
                 }
-                case $fromPackage::ACTION_GET_JOB:
+                case Package::ACTION_GET_JOB:
                 {
                     $queueName = $fromPackage->getValue();
                     if (!empty($this->readyJob[$queueName])) {
@@ -357,7 +346,7 @@ class Worker extends AbstractUnixProcess
                     break;
                 }
 
-                case $fromPackage::ACTION_DELAY_JOB:
+                case Package::ACTION_DELAY_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -385,7 +374,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_GET_DELAY_JOB:
+                case Package::ACTION_GET_DELAY_JOB:
                 {
                     /** @var Job $job */
                     $queueName = $fromPackage->getValue();
@@ -398,7 +387,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $job;
                     break;
                 }
-                case $fromPackage::ACTION_GET_RESERVE_JOB:
+                case Package::ACTION_GET_RESERVE_JOB:
                 {
                     // 从保留任务中拿取
                     /** @var Job $job */
@@ -411,7 +400,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $job;
                     break;
                 }
-                case $fromPackage::ACTION_DELETE_JOB:
+                case Package::ACTION_DELETE_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -440,7 +429,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = false;
                     break;
                 }
-                case $fromPackage::ACTION_JOB_QUEUES:
+                case Package::ACTION_JOB_QUEUES:
                 {
                     $readyJob = array_keys($this->readyJob);
                     $delayJob = array_keys($this->delayJob);
@@ -451,7 +440,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $queue;
                     break;
                 }
-                case $fromPackage::ACTION_JOB_QUEUE_SIZE:
+                case Package::ACTION_JOB_QUEUE_SIZE:
                 {
                     $queueName = $fromPackage->getValue();
                     $return = [
@@ -463,7 +452,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $return;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_JOB:
+                case Package::ACTION_FLUSH_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -482,7 +471,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_READY_JOB:
+                case Package::ACTION_FLUSH_READY_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -495,7 +484,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_RESERVE_JOB:
+                case Package::ACTION_FLUSH_RESERVE_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -508,7 +497,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_BURY_JOB:
+                case Package::ACTION_FLUSH_BURY_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -521,7 +510,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_FLUSH_DELAY_JOB:
+                case Package::ACTION_FLUSH_DELAY_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -534,7 +523,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_RELEASE_JOB:
+                case Package::ACTION_RELEASE_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -581,7 +570,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $jobId;
                     break;
                 }
-                case $fromPackage::ACTION_RESERVE_JOB:
+                case Package::ACTION_RESERVE_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -607,7 +596,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_BURY_JOB:
+                case Package::ACTION_BURY_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -628,7 +617,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     break;
                 }
-                case $fromPackage::ACTION_GET_BURY_JOB:
+                case Package::ACTION_GET_BURY_JOB:
                 {
                     $queueName = $fromPackage->getValue();
 
@@ -641,7 +630,7 @@ class Worker extends AbstractUnixProcess
                     $replayData = $job;
                     break;
                 }
-                case $fromPackage::ACTION_KICK_JOB:
+                case Package::ACTION_KICK_JOB:
                 {
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
@@ -660,7 +649,7 @@ class Worker extends AbstractUnixProcess
                     break;
 
                 }
-                case $fromPackage::ACTION_HSET:
+                case Package::ACTION_HSET:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
@@ -673,7 +662,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HGET:
+                case Package::ACTION_HGET:
                 {
                     $key = $fromPackage->getKey();
                     $field = $fromPackage->getField();
@@ -686,7 +675,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HDEL:
+                case Package::ACTION_HDEL:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
@@ -701,7 +690,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HFLUSH:
+                case Package::ACTION_HFLUSH:
                 {
                     foreach ($this->hashMap as $key => $val) {
                         unset($this->ttlKeys[$key]);
@@ -709,7 +698,7 @@ class Worker extends AbstractUnixProcess
                     $this->hashMap = [];
                     break;
                 }
-                case $fromPackage::ACTION_HKEYS:
+                case Package::ACTION_HKEYS:
                 {
                     $replayData = null;
                     $key = $fromPackage->getKey();
@@ -718,7 +707,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HSCAN:
+                case Package::ACTION_HSCAN:
                 {
                     $replayData = null;
                     $key = $fromPackage->getKey();
@@ -740,7 +729,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HSETNX:
+                case Package::ACTION_HSETNX:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
@@ -751,7 +740,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HEXISTS:
+                case Package::ACTION_HEXISTS:
                 {
                     $replayData = false;
                     $key = $fromPackage->getKey();
@@ -761,7 +750,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HLEN:
+                case Package::ACTION_HLEN:
                 {
                     $replayData = 0;
                     $key = $fromPackage->getKey();
@@ -770,7 +759,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HINCRBY:
+                case Package::ACTION_HINCRBY:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
@@ -788,7 +777,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HMSET:
+                case Package::ACTION_HMSET:
                 {
                     $replayData = true;
                     $key = $fromPackage->getKey();
@@ -798,7 +787,7 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HMGET:
+                case Package::ACTION_HMGET:
                 {
                     $replayData = [];
                     $key = $fromPackage->getKey();
@@ -808,19 +797,26 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case $fromPackage::ACTION_HVALS:
+                case Package::ACTION_HVALS:
                 {
                     $key = $fromPackage->getKey();
                     $replayData = array_values($this->hashMap[$key] ?? []);
                     break;
                 }
-                case $fromPackage::ACTION_HGETALL:
+                case Package::ACTION_HGETALL:
                 {
                     $replayData = [];
                     $key = $fromPackage->getKey();
                     foreach ($this->hashMap[$key] ?? [] as $field => $value) {
                         $replayData[] = $field;
                         $replayData[] = $value;
+                    }
+                    break;
+                }
+                case Package::DEBUG_READ_PROPERTY:{
+                    $key = $fromPackage->getKey();
+                    if(isset($this->$key)){
+                        $replayData = $this->$key;
                     }
                     break;
                 }

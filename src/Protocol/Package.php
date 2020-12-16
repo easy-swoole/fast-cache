@@ -16,6 +16,8 @@ class Package
     protected $fieldValues;
     protected $options = [];
 
+    const DEBUG_READ_PROPERTY = 1;
+
     const ACTION_SET = 11;
     const ACTION_GET =  12;
     const ACTION_KEYS = 13;

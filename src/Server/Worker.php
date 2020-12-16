@@ -109,12 +109,12 @@ class Worker extends AbstractUnixProcess
                     /** @var Job $job */
                     foreach ($jobs as $jobKey => $job) {
                         // 取出时间 + 超时时间 < 当前时间 则放回ready
-                        if ($job->getDequeueTime() + $processConfig->getQueueReserveTime() < time()) {
+                        if ($job->getDequeueTime() + $processConfig->getJobReserveTime() < time()) {
                             $readyJob = $this->reserveJob[$queueName][$jobKey];
                             unset($this->reserveJob[$queueName][$jobKey]);
                             // 判断最大重发次数
                             $releaseTimes = $job->getReleaseTimes();
-                            if ($releaseTimes < $processConfig->getQueueMaxReleaseTimes()) {
+                            if ($releaseTimes < $processConfig->getJobMaxReleaseTimes()) {
                                 $job->setReleaseTimes(++$releaseTimes);
                                 // 如果是延迟队列 更新nextDoTime
                                 if ($job->getDelay() > 0) {
@@ -562,7 +562,7 @@ class Worker extends AbstractUnixProcess
                     // 是否达到最大重发次数
                     /** @var $processConfig WorkerConfig */
                     $processConfig = $this->getConfig();
-                    if ($job->getReleaseTimes() > $processConfig->getQueueMaxReleaseTimes()) {
+                    if ($job->getReleaseTimes() > $processConfig->getJobMaxReleaseTimes()) {
                         $replayData = false;
                         break;
                     }

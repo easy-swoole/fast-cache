@@ -10,8 +10,8 @@ class WorkerConfig extends UnixProcessConfig
 {
     protected $backlog;
     protected $maxMem = '512M';
-    protected $queueReserveTime = 60;
-    protected $queueMaxReleaseTimes = 3;
+    protected $jobReserveTime = 60;
+    protected $jobMaxReleaseTimes = 3;
 
     /**
      * @return mixed
@@ -48,32 +48,32 @@ class WorkerConfig extends UnixProcessConfig
     /**
      * @return int
      */
-    public function getQueueReserveTime(): int
+    public function getJobReserveTime(): int
     {
-        return $this->queueReserveTime;
+        return $this->jobReserveTime;
     }
 
     /**
-     * @param int $queueReserveTime
+     * @param int $jobReserveTime
      */
-    public function setQueueReserveTime(int $queueReserveTime): void
+    public function setJobReserveTime(int $jobReserveTime): void
     {
-        $this->queueReserveTime = $queueReserveTime;
+        $this->jobReserveTime = $jobReserveTime;
     }
 
     /**
      * @return int
      */
-    public function getQueueMaxReleaseTimes(): int
+    public function getJobMaxReleaseTimes(): int
     {
-        return $this->queueMaxReleaseTimes;
+        return $this->jobMaxReleaseTimes;
     }
 
     /**
-     * @param int $queueMaxReleaseTimes
+     * @param int $jobMaxReleaseTimes
      */
-    public function setQueueMaxReleaseTimes(int $queueMaxReleaseTimes): void
+    public function setJobMaxReleaseTimes(int $jobMaxReleaseTimes): void
     {
-        $this->queueMaxReleaseTimes = $queueMaxReleaseTimes;
+        $this->jobMaxReleaseTimes = $jobMaxReleaseTimes;
     }
 }

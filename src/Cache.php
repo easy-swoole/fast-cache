@@ -15,6 +15,7 @@ use EasySwoole\FastCache\Protocol\Protocol;
 use EasySwoole\FastCache\Protocol\UnixClient;
 use EasySwoole\FastCache\Server\Worker;
 use EasySwoole\FastCache\Server\WorkerConfig;
+use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use swoole_server;
 
@@ -799,12 +800,15 @@ class Cache
      * @param float $timeout
      * @return array|mixed
      */
-    private function broadcast(Package $command, $timeout = 0.1)
+    private function broadcast(Package $command, $timeout = null)
     {
+        if($timeout === null){
+            $timeout = $this->config->getTimeout();
+        }
         $info = [];
         $channel = new Channel($this->config->getWorkerNum() + 1);
         for ($i = 0; $i < $this->config->getWorkerNum(); $i++) {
-            go(function () use ($command, $channel, $i, $timeout) {
+            Coroutine::create(function () use ($command, $channel, $i, $timeout) {
                 $ret = $this->sendAndRecv($this->generateSocketByIndex($i), $command, $timeout);
                 $channel->push([
                     $i => $ret

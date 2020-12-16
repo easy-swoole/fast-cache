@@ -26,10 +26,7 @@ class KeysTest extends TestCase
         $res = Cache::getInstance()->set('siam_set3', 'easyswoole');
         $this->assertEquals(true, $res);
 
-        sleep(1);
-
         $keys = Cache::getInstance()->keys();
-
 
         $this->assertEquals(['siam_set','siam_set2','siam_set3'], $keys);
     }

@@ -11,6 +11,7 @@ namespace EasySwoole\FastCache\Tests;
 
 use EasySwoole\FastCache\Cache;
 use PHPUnit\Framework\TestCase;
+use Swoole\Coroutine;
 
 class SetTest extends TestCase
 {
@@ -25,7 +26,7 @@ class SetTest extends TestCase
 
         $res = Cache::getInstance()->set('siam_set', 'easyswoole', 1);
         $this->assertEquals(true, $res);
-        sleep(2);
+        Coroutine::sleep(2);
 
         $info = Cache::getInstance()->get('siam_set');
         $this->assertEquals(null, $info);
@@ -54,7 +55,7 @@ class SetTest extends TestCase
         // 测试再取出 值是否变化
         $info = Cache::getInstance()->get('siam_set');
         $this->assertEquals('easyswoole', $info);
-        sleep(4);
+        Coroutine::sleep(4);
         // 是否还在
         $info = Cache::getInstance()->get('siam_set');
         $this->assertEquals(null, $info);

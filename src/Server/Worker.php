@@ -7,6 +7,8 @@ namespace EasySwoole\FastCache\Server;
 use EasySwoole\Component\Process\Exception;
 use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
 use EasySwoole\FastCache\Job;
+use EasySwoole\FastCache\Protocol\Package;
+use EasySwoole\FastCache\Protocol\Protocol;
 use Swoole\Coroutine\Socket;
 
 class Worker extends AbstractUnixProcess
@@ -68,41 +70,9 @@ class Worker extends AbstractUnixProcess
      */
     public function run($args)
     {
-        /** @var $processConfig CacheProcessConfig */
+        /** @var $processConfig WorkerConfig */
         $processConfig = $this->getConfig();
         ini_set('memory_limit', $processConfig->getMaxMem());
-        // 进程启动时执行
-        if (is_callable($processConfig->getOnStart())) {
-            try {
-                $ret = call_user_func($processConfig->getOnStart(), $this);
-                if ($ret instanceof SyncData) {
-                    $this->dataArray = $ret->getArray();
-                    $this->queueArray = $ret->getQueueArray();
-                    $this->ttlKeys = $ret->getTtlKeys();
-                    // queue 支持
-                    $this->jobIds = $ret->getJobIds();
-                    $this->readyJob = $ret->getReadyJob();
-                    $this->delayJob = $ret->getDelayJob();
-                    $this->reserveJob = $ret->getReserveJob();
-                    $this->buryJob = $ret->getBuryJob();
-                    $this->hashMap = $ret->getHashMap();
-                }
-            } catch (Throwable $throwable) {
-                $this->onException($throwable);
-            }
-        }
-
-        // 设定落地时间定时器
-        if (is_callable($processConfig->getOnTick())) {
-            $this->addTick($processConfig->getTickInterval(), function () use ($processConfig) {
-                try {
-                    call_user_func($processConfig->getOnTick(), $this->getSyncData(), $this);
-                } catch (Throwable $throwable) {
-                    $this->onException($throwable);
-                }
-            });
-        }
-
         // 过期Key自动回收(至少499ms执行一次保证1秒内执行2次过期判断)
         $this->addTick(499, function () use ($processConfig) {
             try {
@@ -156,94 +126,12 @@ class Worker extends AbstractUnixProcess
                     }
                 }
 
-            } catch (Throwable $throwable) {
+            } catch (\Throwable $throwable) {
                 $this->onException($throwable);
             }
         });
 
         parent::run($processConfig);
-    }
-
-    /**
-     * 初始化Spl队列池
-     * @param $key
-     * @return SplQueue
-     */
-    private function initQueue($key): SplQueue
-    {
-        if (!isset($this->queueArray[$key])) {
-            $this->queueArray[$key] = new SplQueue();
-        }
-        return $this->queueArray[$key];
-    }
-
-    /**
-     * 获取当前Spl队列池
-     * @return array
-     */
-    public function getQueueArray(): array
-    {
-        return $this->queueArray;
-    }
-
-    /**
-     * 设置当前Spl队列池
-     * @param array $queueArray
-     */
-    public function setQueueArray(array $queueArray): void
-    {
-        $this->queueArray = $queueArray;
-    }
-
-    /**
-     * 获取当前Spl数组
-     * @return mixed
-     */
-    public function getDataArray()
-    {
-        return $this->dataArray;
-    }
-
-    /**
-     * 设置当前Spl数组
-     * @param mixed $dataArray
-     */
-    public function setDataArray($dataArray): void
-    {
-        $this->dataArray = $dataArray;
-    }
-
-    /**
-     * 进程退出时落地数据
-     * @return void
-     */
-    public function onShutDown()
-    {
-        $onShutdown = $this->getConfig()->getOnShutdown();
-        if (is_callable($onShutdown)) {
-            try {
-                call_user_func($onShutdown, $this->getSyncData(), $this);
-            } catch (Throwable $throwable) {
-                $this->onException($throwable);
-            }
-        }
-    }
-
-
-    protected function getSyncData(): SyncData
-    {
-        $data = new SyncData();
-        $data->setArray($this->dataArray);
-        $data->setQueueArray($this->queueArray);
-        $data->setTtlKeys($this->ttlKeys);
-        // queue 支持
-        $data->setJobIds($this->jobIds);
-        $data->setReadyJob($this->readyJob);
-        $data->setReserveJob($this->reserveJob);
-        $data->setDelayJob($this->delayJob);
-        $data->setBuryJob($this->buryJob);
-        $data->setHashMap($this->buryJob);
-        return $data;
     }
 
     /**
@@ -258,7 +146,6 @@ class Worker extends AbstractUnixProcess
             $socket->close();
             return;
         }
-
         // 收包头声明的包长度 包长一致进入命令处理流程
         $allLength = Protocol::packDataLength($header);
         $data = $socket->recvAll($allLength, 1);
@@ -267,20 +154,8 @@ class Worker extends AbstractUnixProcess
             $socket->sendAll(Protocol::pack(serialize($replyPackage)));
             $socket->close();
         }
-
         // 否则丢弃该包不进行处理
         $socket->close();
-        return;
-    }
-
-    /**
-     * 异常处理
-     * @param Throwable $throwable
-     * @param mixed ...$args
-     */
-    protected function onException(Throwable $throwable, ...$args)
-    {
-        trigger_error("{$throwable->getMessage()} at file:{$throwable->getFile()} line:{$throwable->getLine()}");
     }
 
     /**
@@ -290,10 +165,9 @@ class Worker extends AbstractUnixProcess
      */
     protected function executeCommand(?string $commandPayload)
     {
-        // $replyPackage = new Package();
         $replayData = null;
         $fromPackage = unserialize($commandPayload);
-        if ($fromPackage instanceof Package) { // 进入业务处理流程
+        if ($fromPackage instanceof Package) {
             switch ($fromPackage->getCommand()) {
                 case $fromPackage::ACTION_SET:
                 {
@@ -337,21 +211,21 @@ class Worker extends AbstractUnixProcess
                 }
                 case $fromPackage::ACTION_KEYS:
                 {
-//                    $key = $fromPackage->getKey();
-                    $keys = array_keys($this->dataArray);
+                    /** 检查一次过期数据 */
                     $time = time();
                     foreach ($this->ttlKeys as $ttlKey => $ttl) {
                         if ($ttl < $time) {
-                            unset($keys[$ttlKey], $this->ttlKeys[$ttlKey]);  // 立刻释放过期的ttlKey
+                            unset($this->dataArray[$ttlKey], $this->ttlKeys[$ttlKey]);
                         }
                     }
-                    $replayData = array_keys($this->dataArray);
+                    $keys = array_keys($this->dataArray);
+                    $replayData = $keys;
                     break;
                 }
                 case $fromPackage::ACTION_FLUSH:
                 {
                     $replayData = true;
-                    $this->ttlKeys = [];  // 同时移除全部TTL时间
+                    $this->ttlKeys = [];
                     $this->dataArray = [];
                     $this->buryJob = [];
                     $this->readyJob = [];
@@ -364,7 +238,6 @@ class Worker extends AbstractUnixProcess
                     $replayData = false;
                     $key = $fromPackage->getKey();
                     $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
-                    // 不能给当前没有的Key设置TTL
                     if (array_key_exists($key, $this->dataArray)) {
                         if (!is_null($ttl)) {
                             $this->ttlKeys[$key] = time() + $ttl;
@@ -495,8 +368,6 @@ class Worker extends AbstractUnixProcess
 
                     $job = $this->readyJob[$queueName][$jobId] ?? $this->reserveJob[$queueName][$jobId]
                         ?? $this->buryJob[$queueName][$jobId];
-
-
                     if (!$job) {
                         $replayData = false;
                         break;
@@ -507,15 +378,10 @@ class Worker extends AbstractUnixProcess
                         break;
                     }
                     $job->setNextDoTime(time() + $job->getDelay());
-
-
                     $this->delayJob[$queueName][$jobId] = $job;
-
                     unset($this->readyJob[$queueName][$jobId]);
                     unset($this->reserveJob[$queueName][$jobId]);
                     unset($this->buryJob[$queueName][$jobId]);
-
-
                     $replayData = true;
                     break;
                 }
@@ -537,14 +403,12 @@ class Worker extends AbstractUnixProcess
                     // 从保留任务中拿取
                     /** @var Job $job */
                     $queueName = $fromPackage->getValue();
-
                     if (isset($this->reserveJob[$queueName])) {
                         $job = array_shift($this->reserveJob[$queueName]);
                     } else {
                         $job = null;
                     }
                     $replayData = $job;
-                    break;
                     break;
                 }
                 case $fromPackage::ACTION_DELETE_JOB:
@@ -696,7 +560,7 @@ class Worker extends AbstractUnixProcess
                     unset($this->buryJob[$queueName][$jobKey]);
 
                     // 是否达到最大重发次数
-                    /** @var $processConfig CacheProcessConfig */
+                    /** @var $processConfig WorkerConfig */
                     $processConfig = $this->getConfig();
                     if ($job->getReleaseTimes() > $processConfig->getQueueMaxReleaseTimes()) {
                         $replayData = false;
@@ -977,5 +841,18 @@ class Worker extends AbstractUnixProcess
         }
 
         return ++$this->jobIds[$queueName];
+    }
+
+    /**
+     * 初始化Spl队列池
+     * @param $key
+     * @return \SplQueue
+     */
+    private function initQueue($key): \SplQueue
+    {
+        if (!isset($this->queueArray[$key])) {
+            $this->queueArray[$key] = new \SplQueue();
+        }
+        return $this->queueArray[$key];
     }
 }

@@ -1,21 +1,15 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: yf
- * Date: 2018-12-27
- * Time: 16:06
- */
 
-namespace EasySwoole\FastCache;
+
+namespace EasySwoole\FastCache\Server;
+
 
 use EasySwoole\Component\Process\Exception;
 use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
-use EasySwoole\Spl\SplArray;
-use SplQueue;
+use EasySwoole\FastCache\Job;
 use Swoole\Coroutine\Socket;
-use Throwable;
 
-class CacheProcess extends AbstractUnixProcess
+class Worker extends AbstractUnixProcess
 {
     /**
      * 数组存放当前的缓存内容

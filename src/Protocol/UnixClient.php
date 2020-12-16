@@ -1,12 +1,8 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: yf
- * Date: 2018-12-27
- * Time: 16:07
- */
 
-namespace EasySwoole\FastCache;
+
+namespace EasySwoole\FastCache\Protocol;
+
 
 use Swoole\Coroutine\Client;
 
@@ -14,7 +10,7 @@ class UnixClient
 {
     private $client = null;
 
-    function __construct(string $unixSock)
+    function __construct(string $unixSock,int $maxPackSize,float $timeout)
     {
         $this->client = new Client(SWOOLE_UNIX_STREAM);
         $this->client->set(
@@ -23,15 +19,15 @@ class UnixClient
                 'package_length_type'   => 'N',
                 'package_length_offset' => 0,
                 'package_body_offset'   => 4,
-                'package_max_length'    => 1024 * 1024
+                'package_max_length'    => $maxPackSize,
+                'timeout'=>$timeout
             ]
         );
-        $this->client->connect($unixSock, null, 3);
+        $this->client->connect($unixSock, null, $timeout);
     }
 
     function __destruct()
     {
-        // TODO: Implement __destruct() method.
         if ($this->client->isConnected()) {
             $this->client->close();
         }
@@ -46,7 +42,7 @@ class UnixClient
         }
     }
 
-    function recv(float $timeout = 0.1)
+    function recv(float $timeout)
     {
         if ($this->client->isConnected()) {
             $ret = $this->client->recv($timeout);

@@ -131,9 +131,4 @@ class Job extends SplBean
     {
         $this->releaseTimes = $releaseTimes;
     }
-
-
-
-
-
 }

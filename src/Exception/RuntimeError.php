@@ -9,7 +9,7 @@
 namespace EasySwoole\FastCache\Exception;
 
 
-class RuntimeError extends \Exception
+class RuntimeError extends Exception
 {
 
 }

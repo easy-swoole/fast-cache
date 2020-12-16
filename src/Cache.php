@@ -10,7 +10,11 @@ namespace EasySwoole\FastCache;
 
 use EasySwoole\Component\Process\Exception;
 use EasySwoole\Component\Singleton;
-use EasySwoole\FastCache\Exception\RuntimeError;
+use EasySwoole\FastCache\Protocol\Package;
+use EasySwoole\FastCache\Protocol\Protocol;
+use EasySwoole\FastCache\Protocol\UnixClient;
+use EasySwoole\FastCache\Server\Worker;
+use EasySwoole\FastCache\Server\WorkerConfig;
 use Swoole\Coroutine\Channel;
 use swoole_server;
 
@@ -18,129 +22,17 @@ class Cache
 {
     use Singleton;
 
-    private $tempDir;
-    private $serverName = 'EasySwoole';
-    private $onTick;
-    private $tickInterval = 5 * 1000;
-    private $onStart;
-    private $onShutdown;
-    private $processNum = 3;
-    private $run = false;
-    private $backlog = 256;
+    private $hashAttachServer = false;
+    private $config;
 
-    /**
-     * Cache constructor.
-     */
-    function __construct()
+    function __construct(?Config $config = null)
     {
-        $this->tempDir = getcwd();
-    }
-
-    /**
-     * 设置临时目录
-     * @param string $tempDir 临时目录路径(全路径)
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setTempDir(string $tempDir): Cache
-    {
-        $this->modifyCheck();
-        $this->tempDir = $tempDir;
-        return $this;
-    }
-
-    /**
-     * 设置处理进程数量
-     * @param int $num 进程数量
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setProcessNum(int $num): Cache
-    {
-        $this->modifyCheck();
-        $this->processNum = $num;
-        return $this;
-    }
-
-    /**
-     * 设置UnixSocket的Backlog队列长度
-     * @param int|null $backlog
-     * @return $this
-     * @throws RuntimeError
-     */
-    public function setBacklog(?int $backlog = null)
-    {
-        $this->modifyCheck();
-        if ($backlog != null) {
-            $this->backlog = $backlog;
+        if($config == null){
+            $config = new Config();
         }
-        return $this;
+        $this->config = $config;
     }
 
-    /**
-     * 设置Server名称
-     * @param string $serverName
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setServerName(string $serverName): Cache
-    {
-        $this->modifyCheck();
-        $this->serverName = $serverName;
-        return $this;
-    }
-
-    /**
-     * 设置内部定时器的回调方法(用于数据落地)
-     * @param $onTick
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setOnTick($onTick): Cache
-    {
-        $this->modifyCheck();
-        $this->onTick = $onTick;
-        return $this;
-    }
-
-    /**
-     * 设置内部定时器的间隔时间(用于数据落地)
-     * @param $tickInterval
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setTickInterval($tickInterval): Cache
-    {
-        $this->modifyCheck();
-        $this->tickInterval = $tickInterval;
-        return $this;
-    }
-
-    /**
-     * 设置进程启动时的回调(落地数据恢复)
-     * @param $onStart
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setOnStart($onStart): Cache
-    {
-        $this->modifyCheck();
-        $this->onStart = $onStart;
-        return $this;
-    }
-
-    /**
-     * 设置推出前回调(退出时可落地)
-     * @param callable $onShutdown
-     * @return Cache
-     * @throws RuntimeError
-     */
-    public function setOnShutdown(callable $onShutdown): Cache
-    {
-        $this->modifyCheck();
-        $this->onShutdown = $onShutdown;
-        return $this;
-    }
 
     /**
      * 设置缓存
@@ -150,11 +42,8 @@ class Cache
      * @param float $timeout socket等待超时 下同
      * @return bool|mixed|null
      */
-    function set($key, $value, ?int $ttl = null, float $timeout = 1.0)
+    function set($key, $value, ?int $ttl = null, ?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_SET);
         $com->setValue($value);
@@ -169,11 +58,8 @@ class Cache
      * @param float $timeout
      * @return mixed|null
      */
-    function get($key, float $timeout = 1.0)
+    function get($key, ?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_GET);
         $com->setKey($key);
@@ -186,11 +72,8 @@ class Cache
      * @param float $timeout
      * @return bool|mixed|null
      */
-    function unset($key, float $timeout = 1.0)
+    function unset($key, ?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_UNSET);
         $com->setKey($key);
@@ -203,11 +86,8 @@ class Cache
      * @param float $timeout
      * @return array|null
      */
-    function keys($key = null, float $timeout = 1.0): ?array
+    function keys($key = null, ?float $timeout = null): ?array
     {
-        if ($this->processNum <= 0) {
-            return [];
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_KEYS);
         $com->setKey($key);
@@ -232,11 +112,8 @@ class Cache
      * @param float $timeout
      * @return bool
      */
-    function flush(float $timeout = 1.0)
+    function flush(?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_FLUSH);
         $this->broadcast($com, $timeout);
@@ -252,9 +129,6 @@ class Cache
      */
     public function enQueue($key, $value, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_ENQUEUE);
         $com->setValue($value);
@@ -270,9 +144,6 @@ class Cache
      */
     public function deQueue($key, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_DEQUEUE);
         $com->setKey($key);
@@ -287,9 +158,6 @@ class Cache
      */
     public function queueSize($key, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_QUEUE_SIZE);
         $com->setKey($key);
@@ -304,9 +172,6 @@ class Cache
      */
     public function unsetQueue($key, $timeout = 1.0): ?bool
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_UNSET_QUEUE);
         $com->setKey($key);
@@ -320,9 +185,6 @@ class Cache
      */
     public function queueList($timeout = 1.0): ?array
     {
-        if ($this->processNum <= 0) {
-            return [];
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_QUEUE_LIST);
         $info = $this->broadcast($com, $timeout);
@@ -346,11 +208,8 @@ class Cache
      * @param float $timeout
      * @return bool
      */
-    function flushQueue(float $timeout = 1.0): bool
+    function flushQueue(?float $timeout = null): bool
     {
-        if ($this->processNum <= 0) {
-            return false;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_FLUSH_QUEUE);
         $this->broadcast($com, $timeout);
@@ -366,9 +225,6 @@ class Cache
      */
     function expire($key, int $ttl, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_EXPIRE);
         $com->setKey($key);
@@ -385,9 +241,6 @@ class Cache
      */
     function persist($key, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_PERSISTS);
         $com->setKey($key);
@@ -402,9 +255,6 @@ class Cache
      */
     function ttl($key, $timeout = 1.0)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_TTL);
         $com->setKey($key);
@@ -417,22 +267,16 @@ class Cache
      * @param float $timeout
      * @return int|null
      */
-    public function putJob(Job $job,float $timeout = 1.0):?int
+    public function putJob(Job $job,?float $timeout = null):?int
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_PUT_JOB);
         $com->setValue($job);
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
-    public function getJob(string $jobQueue, float $timeout = 1.0):?Job
+    public function getJob(string $jobQueue, ?float $timeout = null):?Job
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_GET_JOB);
         $com->setValue($jobQueue);
@@ -445,11 +289,8 @@ class Cache
      * @param float $timeout
      * @return Job|null
      */
-    public function getDelayJob(string $queueName, float $timeout = 1.0):?Job
+    public function getDelayJob(string $queueName, ?float $timeout = null):?Job
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_GET_DELAY_JOB);
         $com->setValue($queueName);
@@ -462,11 +303,8 @@ class Cache
      * @param float $timeout
      * @return Job|null
      */
-    public function getReserveJob(string $queueName, float $timeout = 1.0):?Job
+    public function getReserveJob(string $queueName, ?float $timeout = null):?Job
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_GET_RESERVE_JOB);
         $com->setValue($queueName);
@@ -478,11 +316,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function delayJob(Job $job,float $timeout = 1.0):?bool
+    public function delayJob(Job $job,?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_DELAY_JOB);
         $com->setValue($job);
@@ -495,11 +330,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function releaseJob(Job $job,float $timeout = 1.0):?bool
+    public function releaseJob(Job $job,?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_RELEASE_JOB);
         $com->setValue($job);
@@ -512,11 +344,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function reserveJob(Job $job,float $timeout = 1.0):?bool
+    public function reserveJob(Job $job,?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_RESERVE_JOB);
         $com->setValue($job);
@@ -529,12 +358,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function deleteJob(Job $job,float $timeout = 1.0):?bool
+    public function deleteJob(Job $job,?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if (!$job->getJobId()){
             return false;
         }
@@ -554,11 +379,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function buryJob(Job $job,float $timeout = 1.0):?bool
+    public function buryJob(Job $job,?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         // 必须传递queueName和jobId
         if (empty($job->getJobId())){
             return false;
@@ -579,12 +401,8 @@ class Cache
      * @param float $timeout
      * @return Job|null
      */
-    public function getBuryJob(string $queueName, float $timeout = 1.0):?Job
+    public function getBuryJob(string $queueName, ?float $timeout = null):?Job
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         $com = new Package();
         $com->setCommand($com::ACTION_GET_BURY_JOB);
         $com->setValue($queueName);
@@ -597,12 +415,8 @@ class Cache
      * @param float $timeout
      * @return bool|null
      */
-    public function kickJob(Job $job, float $timeout = 1.0):?bool
+    public function kickJob(Job $job, ?float $timeout = null):?bool
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         // 必须传递queueName和jobId
         if (empty($job->getJobId())){
             return false;
@@ -617,11 +431,8 @@ class Cache
         return $this->sendAndRecv($this->generateSocket($job->getQueue()), $com, $timeout);
     }
 
-    public function jobQueues(float $timeout = 1.0):?array
+    public function jobQueues(?float $timeout = null):?array
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
         $com = new Package();
         $com->setCommand($com::ACTION_JOB_QUEUES);
         $info = $this->broadcast($com, $timeout);
@@ -642,12 +453,8 @@ class Cache
 
     }
 
-    public function flushJobQueue(string $jobQueue = null,float $timeout = 1.0)
+    public function flushJobQueue(string $jobQueue = null,?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if ($jobQueue !== null){
             $com = new Package();
             $com->setCommand($com::ACTION_FLUSH_JOB);
@@ -674,12 +481,8 @@ class Cache
      * @param float $timeout
      * @return array|mixed|null
      */
-    public function flushReadyJobQueue(string $queueName = null,float $timeout = 1.0)
+    public function flushReadyJobQueue(string $queueName = null,?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if ($queueName !== null){
             $com = new Package();
             $com->setCommand($com::ACTION_FLUSH_READY_JOB);
@@ -704,12 +507,8 @@ class Cache
      * @param float $timeout
      * @return array|mixed|null
      */
-    public function flushReserveJobQueue(string $queueName = null,float $timeout = 1.0)
+    public function flushReserveJobQueue(string $queueName = null,?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if ($queueName !== null){
             $com = new Package();
             $com->setCommand($com::ACTION_FLUSH_RESERVE_JOB);
@@ -734,12 +533,8 @@ class Cache
      * @param float $timeout
      * @return array|mixed|null
      */
-    public function flushBuryJobQueue(string $queueName = null,float $timeout = 1.0)
+    public function flushBuryJobQueue(string $queueName = null,?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if ($queueName !== null){
             $com = new Package();
             $com->setCommand($com::ACTION_FLUSH_BURY_JOB);
@@ -764,12 +559,8 @@ class Cache
      * @param float $timeout
      * @return array|mixed|null
      */
-    public function flushDelayJobQueue(string $queueName = null,float $timeout = 1.0)
+    public function flushDelayJobQueue(string $queueName = null,?float $timeout = null)
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         if ($queueName !== null){
             $com = new Package();
             $com->setCommand($com::ACTION_FLUSH_DELAY_JOB);
@@ -789,16 +580,136 @@ class Cache
         }
     }
 
-    public function jobQueueSize(string $jobQueue,float $timeout = 1.0):?array
+    public function jobQueueSize(string $jobQueue,?float $timeout = null):?array
     {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-
         $com = new Package();
         $com->setCommand($com::ACTION_JOB_QUEUE_SIZE);
         $com->setValue($jobQueue);
         return $this->sendAndRecv($this->generateSocket($jobQueue), $com, $timeout);
+    }
+
+    function hset($key, $field, $value, ?int $ttl = null, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSET);
+        $com->setValue($value);
+        $com->setField($field);
+        $com->setKey($key);
+        $com->setOption($com::ACTION_TTL, $ttl);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hget($key, $field=null, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HGET);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hdel($key, $field=null, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HDEL);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hflush(?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HFLUSH);
+        $this->broadcast($com, $timeout);
+        return true;
+    }
+
+    function hkeys($key, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HKEYS);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hscan($key, $cursor=0, $limit=10, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSCAN);
+        $com->setKey($key);
+        $com->setCursor($cursor);
+        $com->setLimit($limit);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hsetnx($key, $field, $value, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HSETNX);
+        $com->setKey($key);
+        $com->setField($field);
+        $com->setValue($value);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hExists($key, $field, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HEXISTS);
+        $com->setKey($key);
+        $com->setField($field);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hLen($key, ?float $timeout = null) {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HLEN);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hIncrby($key, $field, $value, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HINCRBY);
+        $com->setKey($key);
+        $com->setField($field);
+        $com->setValue($value);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hMset($key, $fieldValues, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HMSET);
+        $com->setKey($key);
+        $com->setFieldValues($fieldValues);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hMget($key, $fields, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HMGET);
+        $com->setKey($key);
+        $com->setFields($fields);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hVals($key, ?float $timeout = null)
+    {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HVALS);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
+    }
+
+    function hGetAll($key, ?float $timeout = null) {
+        $com = new Package();
+        $com->setCommand($com::ACTION_HGETALL);
+        $com->setKey($key);
+        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
     }
 
     /**
@@ -810,7 +721,6 @@ class Cache
     {
         $list = $this->initProcess();
         foreach ($list as $process) {
-            /** @var $proces CacheProcess */
             $server->addProcess($process->getProcess());
         }
     }
@@ -822,21 +732,15 @@ class Cache
      */
     public function initProcess(): array
     {
-        $this->run = true;
+        $this->hashAttachServer = true;
         $array = [];
-        for ($i = 1; $i <= $this->processNum; $i++) {
-            $config = new CacheProcessConfig();
-            $config->setProcessName("{$this->serverName}.FastCacheProcess.{$i}");
+        for ($i = 0; $i < $this->config->getWorkerNum(); $i++) {
+            $config = new WorkerConfig();
+            $config->setProcessName("{$this->config->getServerName()}.FastCacheProcess.{$i}");
             $config->setSocketFile($this->generateSocketByIndex($i));
-            $config->setOnStart($this->onStart);
-            $config->setOnShutdown($this->onShutdown);
-            $config->setOnTick($this->onTick);
-            $config->setTickInterval($this->tickInterval);
-            $config->setTempDir($this->tempDir);
-            $config->setBacklog($this->backlog);
+            $config->setBacklog($this->config->getBacklog());
             $config->setAsyncCallback(false);
-            $config->setWorkerIndex($i);
-            $array[$i] = new CacheProcess($config);
+            $array[$i] = new Worker($config);
         }
         return $array;
     }
@@ -848,7 +752,7 @@ class Cache
      */
     private function generateSocket($key): string
     {
-        $index = (base_convert(substr(md5($key), 0, 2), 16, 10) % $this->processNum) + 1;
+        $index = (base_convert(substr(md5($key), 0, 2), 16, 10) % $this->config->getWorkerNum());
         return $this->generateSocketByIndex($index);
     }
 
@@ -859,7 +763,7 @@ class Cache
      */
     private function generateSocketByIndex($index)
     {
-        return $this->tempDir . "/{$this->serverName}.FastCacheProcess.{$index}.sock";
+        return $this->config->getTempDir() . "/{$this->config->getServerName()}.FastCacheProcess.{$index}.sock";
     }
 
     /**
@@ -869,9 +773,13 @@ class Cache
      * @param $timeout
      * @return mixed|null
      */
-    private function sendAndRecv($socketFile, Package $package, $timeout)
+    private function sendAndRecv($socketFile, Package $package,?float $timeout = null)
     {
-        $client = new UnixClient($socketFile);
+        if($timeout === null){
+            $timeout = $this->config->getTimeout();
+        }
+        $maxPack = $this->config->getMaxPackageSize();
+        $client = new UnixClient($socketFile,$maxPack,$timeout);
         $client->send(Protocol::pack(serialize($package)));
         $ret = $client->recv($timeout);
         if (!empty($ret)) {
@@ -894,8 +802,8 @@ class Cache
     private function broadcast(Package $command, $timeout = 0.1)
     {
         $info = [];
-        $channel = new Channel($this->processNum + 1);
-        for ($i = 1; $i <= $this->processNum; $i++) {
+        $channel = new Channel($this->config->getWorkerNum() + 1);
+        for ($i = 0; $i < $this->config->getWorkerNum(); $i++) {
             go(function () use ($command, $channel, $i, $timeout) {
                 $ret = $this->sendAndRecv($this->generateSocketByIndex($i), $command, $timeout);
                 $channel->push([
@@ -911,7 +819,7 @@ class Cache
             $temp = $channel->pop($timeout);
             if (is_array($temp)) {
                 $info += $temp;
-                if (count($info) == $this->processNum) {
+                if (count($info) == $this->config->getWorkerNum()) {
                     break;
                 }
             }
@@ -919,180 +827,4 @@ class Cache
         return $info;
     }
 
-    /**
-     * 启动后就不允许更改设置
-     * @throws RuntimeError
-     */
-    private function modifyCheck()
-    {
-        if ($this->run) {
-            throw new RuntimeError('you can not modify configure after init process check');
-        }
-    }
-
-    function hset($key, $field, $value, ?int $ttl = null, float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HSET);
-        $com->setValue($value);
-        $com->setField($field);
-        $com->setKey($key);
-        $com->setOption($com::ACTION_TTL, $ttl);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hget($key, $field=null, float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return null;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HGET);
-        $com->setKey($key);
-        $com->setField($field);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hdel($key, $field=null, float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HDEL);
-        $com->setKey($key);
-        $com->setField($field);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hflush(float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HFLUSH);
-        $this->broadcast($com, $timeout);
-        return true;
-    }
-
-    function hkeys($key, float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HKEYS);
-        $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hscan($key, $cursor=0, $limit=10, float $timeout = 1.0)
-    {
-        if ($this->processNum <= 0) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HSCAN);
-        $com->setKey($key);
-        $com->setCursor($cursor);
-        $com->setLimit($limit);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hsetnx($key, $field, $value, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HSETNX);
-        $com->setKey($key);
-        $com->setField($field);
-        $com->setValue($value);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hExists($key, $field, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HEXISTS);
-        $com->setKey($key);
-        $com->setField($field);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hLen($key, float $timeout = 1.0) {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HLEN);
-        $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hIncrby($key, $field, $value, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HINCRBY);
-        $com->setKey($key);
-        $com->setField($field);
-        $com->setValue($value);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hMset($key, $fieldValues, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HMSET);
-        $com->setKey($key);
-        $com->setFieldValues($fieldValues);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hMget($key, $fields, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HMGET);
-        $com->setKey($key);
-        $com->setFields($fields);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hVals($key, float $timeout = 1.0)
-    {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HVALS);
-        $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
-
-    function hGetAll($key, float $timeout = 1.0) {
-        if ($this->processNum <=0 ) {
-            return false;
-        }
-        $com = new Package();
-        $com->setCommand($com::ACTION_HGETALL);
-        $com->setKey($key);
-        return $this->sendAndRecv($this->generateSocket($key), $com, $timeout);
-    }
 }

@@ -351,25 +351,28 @@ class Worker extends AbstractUnixProcess
 
                 case Package::ACTION_DELAY_JOB:
                 {
+                    $replayData = false;
                     /** @var Job $job */
                     $job = $fromPackage->getValue();
                     $queueName = $job->getQueue();
                     $jobId = "_" . $job->getJobId();
 
                     $delay = $job->getDelay();
+                    if ($delay == 0) {
+                        break;
+                    }
 
-                    $job = $this->readyJob[$queueName][$jobId] ?? $this->reserveJob[$queueName][$jobId]
-                        ?? $this->buryJob[$queueName][$jobId];
+                    $job = null;
+                    $job = $job ?? (isset($this->readyJob[$queueName][$jobId]) ? $this->readyJob[$queueName][$jobId] : null);
+                    $job = $job ?? (isset($this->reserveJob[$queueName][$jobId]) ? $this->reserveJob[$queueName][$jobId] : null);
+                    $job = $job ?? (isset($this->buryJob[$queueName][$jobId]) ? $this->buryJob[$queueName][$jobId] : null);
+
                     if (!$job) {
                         $replayData = false;
                         break;
                     }
                     $job->setDelay($delay);
-                    if ($job->getDelay() == 0) {
-                        $replayData = false;
-                        break;
-                    }
-                    $job->setNextDoTime(time() + $job->getDelay());
+                    $job->setNextDoTime(time() + $delay);
                     $this->delayJob[$queueName][$jobId] = $job;
                     unset($this->readyJob[$queueName][$jobId]);
                     unset($this->reserveJob[$queueName][$jobId]);

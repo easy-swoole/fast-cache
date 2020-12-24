@@ -216,6 +216,9 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     $this->ttlKeys = [];
                     $this->dataArray = [];
+                    $this->queueArray = [];
+                    $this->hashMap = [];
+                    $this->jobIds = [];
                     $this->buryJob = [];
                     $this->readyJob = [];
                     $this->delayJob = [];

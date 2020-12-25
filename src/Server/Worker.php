@@ -362,18 +362,18 @@ class Worker extends AbstractUnixProcess
                         break;
                     }
 
-                    $job = null;
-                    $job = $job ?? (isset($this->readyJob[$queueName][$jobId]) ? $this->readyJob[$queueName][$jobId] : null);
-                    $job = $job ?? (isset($this->reserveJob[$queueName][$jobId]) ? $this->reserveJob[$queueName][$jobId] : null);
-                    $job = $job ?? (isset($this->buryJob[$queueName][$jobId]) ? $this->buryJob[$queueName][$jobId] : null);
+                    $originJob = null;
+                    $originJob = $originJob ?? (isset($this->readyJob[$queueName][$jobId]) ? $this->readyJob[$queueName][$jobId] : null);
+                    $originJob = $originJob ?? (isset($this->reserveJob[$queueName][$jobId]) ? $this->reserveJob[$queueName][$jobId] : null);
+                    $originJob = $originJob ?? (isset($this->buryJob[$queueName][$jobId]) ? $this->buryJob[$queueName][$jobId] : null);
 
-                    if (!$job) {
+                    if (!$originJob) {
                         $replayData = false;
                         break;
                     }
-                    $job->setDelay($delay);
-                    $job->setNextDoTime(time() + $delay);
-                    $this->delayJob[$queueName][$jobId] = $job;
+                    $originJob->setDelay($delay);
+                    $originJob->setNextDoTime(time() + $delay);
+                    $this->delayJob[$queueName][$jobId] = $originJob;
                     unset($this->readyJob[$queueName][$jobId]);
                     unset($this->reserveJob[$queueName][$jobId]);
                     unset($this->buryJob[$queueName][$jobId]);
@@ -539,15 +539,19 @@ class Worker extends AbstractUnixProcess
                     $delay = $job->getDelay();
 
                     // $job需要重新取 兼容手动提供queueNam和jobId来重发任务
-                    $job = $this->readyJob[$queueName][$jobKey] ?? $this->delayJob[$queueName][$jobKey]
-                        ?? $this->reserveJob[$queueName][$jobKey] ?? $this->buryJob[$queueName][$jobKey];
+
+                    $originJob = null;
+                    $originJob = $originJob ?? (isset($this->readyJob[$queueName][$jobKey]) ? $this->readyJob[$queueName][$jobKey] : null);
+                    $originJob = $originJob ?? (isset($this->delayJob[$queueName][$jobKey]) ? $this->delayJob[$queueName][$jobKey] : null);
+                    $originJob = $originJob ?? (isset($this->reserveJob[$queueName][$jobKey]) ? $this->reserveJob[$queueName][$jobKey] : null);
+                    $originJob = $originJob ?? (isset($this->buryJob[$queueName][$jobKey]) ? $this->buryJob[$queueName][$jobKey] : null);
 
                     // 没有该任务
-                    if (!$job) {
+                    if (!$originJob) {
                         $replayData = false;
                         break;
                     }
-                    $job->setDelay($delay);
+                    $originJob->setDelay($delay);
 
                     unset($this->readyJob[$queueName][$jobKey]);
                     unset($this->delayJob[$queueName][$jobKey]);
@@ -557,20 +561,20 @@ class Worker extends AbstractUnixProcess
                     // 是否达到最大重发次数
                     /** @var $processConfig WorkerConfig */
                     $processConfig = $this->getConfig();
-                    if ($job->getReleaseTimes() > $processConfig->getJobMaxReleaseTimes()) {
+                    if ($originJob->getReleaseTimes() > $processConfig->getJobMaxReleaseTimes()) {
                         $replayData = false;
                         break;
                     }
 
-                    $releaseTimes = $job->getReleaseTimes();
-                    $job->setReleaseTimes(++$releaseTimes);
+                    $releaseTimes = $originJob->getReleaseTimes();
+                    $originJob->setReleaseTimes(++$releaseTimes);
 
                     // 判断是否为延迟队列
-                    if ($job->getDelay() > 0) {
-                        $job->setNextDoTime(time() + $job->getDelay());
-                        $this->delayJob[$queueName][$jobKey] = $job;
+                    if ($originJob->getDelay() > 0) {
+                        $originJob->setNextDoTime(time() + $originJob->getDelay());
+                        $this->delayJob[$queueName][$jobKey] = $originJob;
                     } else {
-                        $this->readyJob[$queueName][$jobKey] = $job;
+                        $this->readyJob[$queueName][$jobKey] = $originJob;
                     }
 
                     $replayData = $jobId;
@@ -583,17 +587,19 @@ class Worker extends AbstractUnixProcess
                     $queueName = $job->getQueue();
                     $jobId = "_" . $job->getJobId();
 
-                    $job = $this->readyJob[$queueName][$jobId] ?? $this->delayJob[$queueName][$jobId]
-                        ?? $this->buryJob[$queueName][$jobId];
+                    $originJob = null;
+                    $originJob = $originJob ?? (isset($this->readyJob[$queueName][$jobId]) ? $this->readyJob[$queueName][$jobId] : null);
+                    $originJob = $originJob ?? (isset($this->delayJob[$queueName][$jobId]) ? $this->delayJob[$queueName][$jobId] : null);
+                    $originJob = $originJob ?? (isset($this->buryJob[$queueName][$jobId]) ? $this->buryJob[$queueName][$jobId] : null);
 
-                    if (!$job) {
+                    if (!$originJob) {
                         $replayData = false;
                         break;
                     }
 
-                    $job->setDequeueTime(time());
+                    $originJob->setDequeueTime(time());
 
-                    $this->reserveJob[$queueName][$jobId] = $job;
+                    $this->reserveJob[$queueName][$jobId] = $originJob;
 
                     unset($this->readyJob[$queueName][$jobId]);
                     unset($this->delayJob[$queueName][$jobId]);
@@ -611,10 +617,18 @@ class Worker extends AbstractUnixProcess
                     $jobKey = "_" . $jobId;
 
                     // 重新拿job 兼容手动传递jobId来bury
-                    $job = $this->readyJob[$queueName][$jobKey] ?? $this->delayJob[$queueName][$jobKey]
-                        ?? $this->reserveJob[$queueName][$jobKey];
+                    $originJob = $originJob ?? (isset($this->readyJob[$queueName][$jobKey]) ? $this->readyJob[$queueName][$jobKey] : null);
+                    $originJob = $originJob ?? (isset($this->delayJob[$queueName][$jobKey]) ? $this->delayJob[$queueName][$jobKey] : null);
+                    $originJob = $originJob ?? (isset($this->reserveJob[$queueName][$jobKey]) ? $this->reserveJob[$queueName][$jobKey] : null);
 
-                    $this->buryJob[$queueName][$jobKey] = $job;
+                    // 没有该任务
+                    if (!$originJob) {
+                        $replayData = false;
+                        break;
+                    }
+
+
+                    $this->buryJob[$queueName][$jobKey] = $originJob;
 
                     unset($this->readyJob[$queueName][$jobKey]);
                     unset($this->delayJob[$queueName][$jobKey]);

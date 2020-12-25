@@ -700,7 +700,6 @@ class Worker extends AbstractUnixProcess
                     $replayData = true;
                     $key = $fromPackage->getKey();
                     $field = $fromPackage->getField();
-                    unset($this->ttlKeys[$key]); // 同时移除TTL
                     if (empty($key)) {
                         $replayData = false;
                     } else if (empty($field)) {
@@ -712,9 +711,6 @@ class Worker extends AbstractUnixProcess
                 }
                 case Package::ACTION_HFLUSH:
                 {
-                    foreach ($this->hashMap as $key => $val) {
-                        unset($this->ttlKeys[$key]);
-                    }
                     $this->hashMap = [];
                     break;
                 }

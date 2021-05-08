@@ -373,7 +373,7 @@ class CacheProcess extends AbstractUnixProcess
                         $key = $fromPackage->getKey();
                         $ttl = $fromPackage->getOption($fromPackage::ACTION_TTL);
                         // 不能给当前没有的Key设置TTL
-                        if (array_key_exists($key, $this->splArray)) {
+                        if (array_key_exists($key, (array)$this->splArray)) {
                             if (!is_null($ttl)) {
                                 $this->ttlKeys[$key] = time() + $ttl;
                                 $replayData = true;
@@ -396,7 +396,7 @@ class CacheProcess extends AbstractUnixProcess
                         $time = time();
 
                         // 不能查询当前没有的Key
-                        if (array_key_exists($key, $this->splArray) && array_key_exists($key, $this->ttlKeys)) {
+                        if (array_key_exists($key, (array)$this->splArray) && array_key_exists($key, $this->ttlKeys)) {
                             $expire = $this->ttlKeys[$key];
                             if ($expire > $time) {  // 有剩余时间时才会返回剩余ttl 否则返回null表示已经过期或未设置 不区分主动过期和key不存在的情况
                                 $replayData = $expire - $time;

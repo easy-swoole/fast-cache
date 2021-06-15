@@ -13,7 +13,8 @@ class Config extends SplBean
     protected $workerNum = 3;
     protected $backlog = 256;
     protected $timeout = 3.0;
-    protected $maxPackageSize = 1024*1024*2;
+    protected $maxPackageSize = 1024 * 1024 * 2;
+    protected $maxMem = '512M';
 
     /**
      * @return mixed
@@ -111,9 +112,25 @@ class Config extends SplBean
         $this->maxPackageSize = $maxPackageSize;
     }
 
+    /**
+     * @return string
+     */
+    public function getMaxMem(): string
+    {
+        return $this->maxMem;
+    }
+
+    /**
+     * @param string $maxMem
+     */
+    public function setMaxMem(string $maxMem): void
+    {
+        $this->maxMem = $maxMem;
+    }
+
     protected function initialize(): void
     {
-        if(empty($this->tempDir)){
+        if (empty($this->tempDir)) {
             $this->tempDir = getcwd();
         }
     }

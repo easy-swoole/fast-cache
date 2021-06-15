@@ -25,6 +25,9 @@ class Cache
 
     private $config;
 
+    /** @var bool $hashAttachServer */
+    private $hashAttachServer = false;
+
     function __construct(?Config $config = null)
     {
         if($config == null){
@@ -751,6 +754,7 @@ class Cache
         $array = [];
         for ($i = 0; $i < $this->config->getWorkerNum(); $i++) {
             $config = new WorkerConfig();
+            $config->setMaxMem($this->config->getMaxMem());
             $config->setProcessName("{$this->config->getServerName()}.FastCacheProcess.{$i}");
             $config->setSocketFile($this->generateSocketByIndex($i));
             $config->setBacklog($this->config->getBacklog());

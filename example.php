@@ -7,7 +7,9 @@ require 'vendor/autoload.php';
 
 $http = new swoole_http_server("127.0.0.1", 9501);
 
-Cache::getInstance()->attachToServer($http);
+$config = new \EasySwoole\FastCache\Config();
+$config->setMaxMem("1024M");
+Cache::getInstance($config)->attachToServer($http);
 
 
 $http->on("request", function ($request, $response) {

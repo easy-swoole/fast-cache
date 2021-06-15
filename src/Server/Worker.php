@@ -6,6 +6,7 @@ namespace EasySwoole\FastCache\Server;
 
 use EasySwoole\Component\Process\Exception;
 use EasySwoole\Component\Process\Socket\AbstractUnixProcess;
+use EasySwoole\FastCache\Config;
 use EasySwoole\FastCache\Job;
 use EasySwoole\FastCache\Protocol\Package;
 use EasySwoole\FastCache\Protocol\Protocol;
@@ -14,6 +15,10 @@ use Swoole\Coroutine\Socket;
 
 class Worker extends AbstractUnixProcess
 {
+
+    /** @var Config $fastCacheConfig */
+    protected $fastCacheConfig;
+
     /**
      * 数组存放当前的缓存内容
      * @var array
@@ -66,19 +71,19 @@ class Worker extends AbstractUnixProcess
 
     /**
      * 进程初始化并开始监听Socket
-     * @param $args
+     * @param $arg
      * @throws Exception
      */
-    public function run($args)
+    public function run($arg)
     {
-        /** @var $processConfig WorkerConfig */
-        $processConfig = $this->getConfig();
-        ini_set('memory_limit', $processConfig->getMaxMem());
-        Coroutine::create(function ()use($processConfig){
-            while (1){
+        /** @var Config $fastCacheConfig */
+        $fastCacheConfig = $this->fastCacheConfig = $arg;
+        ini_set('memory_limit', $fastCacheConfig->getMaxMem());
+        Coroutine::create(function () use ($fastCacheConfig) {
+            while (1) {
                 try {
                     if (!empty($this->ttlKeys)) {
-                        foreach ($this->ttlKeys as $ttlKey => $expire){
+                        foreach ($this->ttlKeys as $ttlKey => $expire) {
                             if ($expire < time()) {
                                 unset($this->ttlKeys[$ttlKey], $this->dataArray[$ttlKey]);
                             }
@@ -101,12 +106,12 @@ class Worker extends AbstractUnixProcess
                         /** @var Job $job */
                         foreach ($jobs as $jobKey => $job) {
                             // 取出时间 + 超时时间 < 当前时间 则放回ready
-                            if ($job->getDequeueTime() + $processConfig->getJobReserveTime() < time()) {
+                            if ($job->getDequeueTime() + $fastCacheConfig->getJobReserveTime() < time()) {
                                 $readyJob = $this->reserveJob[$queueName][$jobKey];
                                 unset($this->reserveJob[$queueName][$jobKey]);
                                 // 判断最大重发次数
                                 $releaseTimes = $job->getReleaseTimes();
-                                if ($releaseTimes < $processConfig->getJobMaxReleaseTimes()) {
+                                if ($releaseTimes < $fastCacheConfig->getJobMaxReleaseTimes()) {
                                     $job->setReleaseTimes(++$releaseTimes);
                                     // 如果是延迟队列 更新nextDoTime
                                     if ($job->getDelay() > 0) {
@@ -124,7 +129,7 @@ class Worker extends AbstractUnixProcess
                 Coroutine::sleep(0.49);
             }
         });
-        parent::run($processConfig);
+        parent::run($fastCacheConfig);
     }
 
     /**
@@ -559,9 +564,8 @@ class Worker extends AbstractUnixProcess
                     unset($this->buryJob[$queueName][$jobKey]);
 
                     // 是否达到最大重发次数
-                    /** @var $processConfig WorkerConfig */
-                    $processConfig = $this->getConfig();
-                    if ($originJob->getReleaseTimes() > $processConfig->getJobMaxReleaseTimes()) {
+                    $fastCacheConfig = $this->fastCacheConfig;
+                    if ($originJob->getReleaseTimes() > $fastCacheConfig->getJobMaxReleaseTimes()) {
                         $replayData = false;
                         break;
                     }
@@ -829,9 +833,10 @@ class Worker extends AbstractUnixProcess
                     }
                     break;
                 }
-                case Package::DEBUG_READ_PROPERTY:{
+                case Package::DEBUG_READ_PROPERTY:
+                {
                     $key = $fromPackage->getKey();
-                    if(isset($this->$key)){
+                    if (isset($this->$key)) {
                         $replayData = $this->$key;
                     }
                     break;
@@ -843,7 +848,7 @@ class Worker extends AbstractUnixProcess
 
     /**
      * 根据队列名获取jobId
-     * @param string $queueName
+     * @param mixed $queueName
      * @return int
      */
     private function getJobId($queueName)

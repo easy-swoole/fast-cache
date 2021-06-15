@@ -11,10 +11,11 @@ class Config extends SplBean
     protected $tempDir;
     protected $serverName = 'EasySwoole';
     protected $workerNum = 3;
-    protected $backlog = 256;
     protected $timeout = 3.0;
     protected $maxPackageSize = 1024 * 1024 * 2;
     protected $maxMem = '512M';
+    protected $jobReserveTime = 60;
+    protected $jobMaxReleaseTimes = 3;
 
     /**
      * @return mixed
@@ -64,21 +65,6 @@ class Config extends SplBean
         $this->workerNum = $workerNum;
     }
 
-    /**
-     * @return int
-     */
-    public function getBacklog(): int
-    {
-        return $this->backlog;
-    }
-
-    /**
-     * @param int $backlog
-     */
-    public function setBacklog(int $backlog): void
-    {
-        $this->backlog = $backlog;
-    }
 
     /**
      * @return float
@@ -126,6 +112,38 @@ class Config extends SplBean
     public function setMaxMem(string $maxMem): void
     {
         $this->maxMem = $maxMem;
+    }
+
+    /**
+     * @return int
+     */
+    public function getJobReserveTime(): int
+    {
+        return $this->jobReserveTime;
+    }
+
+    /**
+     * @param int $jobReserveTime
+     */
+    public function setJobReserveTime(int $jobReserveTime): void
+    {
+        $this->jobReserveTime = $jobReserveTime;
+    }
+
+    /**
+     * @return int
+     */
+    public function getJobMaxReleaseTimes(): int
+    {
+        return $this->jobMaxReleaseTimes;
+    }
+
+    /**
+     * @param int $jobMaxReleaseTimes
+     */
+    public function setJobMaxReleaseTimes(int $jobMaxReleaseTimes): void
+    {
+        $this->jobMaxReleaseTimes = $jobMaxReleaseTimes;
     }
 
     protected function initialize(): void

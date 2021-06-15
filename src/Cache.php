@@ -9,12 +9,12 @@
 namespace EasySwoole\FastCache;
 
 use EasySwoole\Component\Process\Exception;
+use EasySwoole\Component\Process\Socket\UnixProcessConfig;
 use EasySwoole\Component\Singleton;
 use EasySwoole\FastCache\Protocol\Package;
 use EasySwoole\FastCache\Protocol\Protocol;
 use EasySwoole\FastCache\Protocol\UnixClient;
 use EasySwoole\FastCache\Server\Worker;
-use EasySwoole\FastCache\Server\WorkerConfig;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use swoole_server;
@@ -753,12 +753,14 @@ class Cache
         $this->hashAttachServer = true;
         $array = [];
         for ($i = 0; $i < $this->config->getWorkerNum(); $i++) {
-            $config = new WorkerConfig();
-            $config->setMaxMem($this->config->getMaxMem());
+
+            $config = new UnixProcessConfig();
             $config->setProcessName("{$this->config->getServerName()}.FastCacheProcess.{$i}");
             $config->setSocketFile($this->generateSocketByIndex($i));
-            $config->setBacklog($this->config->getBacklog());
+            $config->setProcessGroup("{$this->config->getServerName()}.FastCacheProcess");
             $config->setAsyncCallback(false);
+            $config->setArg($this->config);
+
             $array[$i] = new Worker($config);
         }
         return $array;

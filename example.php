@@ -5,7 +5,7 @@ use EasySwoole\FastCache\Cache;
 require 'vendor/autoload.php';
 
 
-$http = new swoole_http_server("127.0.0.1", 9501);
+$http = new Swoole\Http\Server("127.0.0.1", 9501);
 
 $config = new \EasySwoole\FastCache\Config();
 $config->setMaxMem("1024M");

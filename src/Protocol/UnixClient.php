@@ -23,7 +23,7 @@ class UnixClient
                 'timeout'=>$timeout
             ]
         );
-        $this->client->connect($unixSock, null, $timeout);
+        $this->client->connect($unixSock, 0, $timeout);
     }
 
     function __destruct()

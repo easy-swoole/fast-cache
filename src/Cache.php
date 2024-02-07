@@ -17,7 +17,7 @@ use EasySwoole\FastCache\Protocol\UnixClient;
 use EasySwoole\FastCache\Server\Worker;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
-use swoole_server;
+use Swoole\Server;
 
 class Cache
 {
@@ -722,10 +722,10 @@ class Cache
 
     /**
      * 绑定到当前主服务
-     * @param swoole_server $server
+     * @param Server $server
      * @throws Exception
      */
-    function attachToServer(swoole_server $server)
+    function attachToServer(Server $server)
     {
         $list = $this->__initProcess();
         foreach ($list as $process) {

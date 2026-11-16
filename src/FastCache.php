@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace EasySwoole\FastCache;
 
 use EasySwoole\Component\Process\Socket\UnixProcessConfig;
+use EasySwoole\FastCache\Client\UnixClient;
+use EasySwoole\FastCache\Protocol\Command;
+use EasySwoole\FastCache\Protocol\OpCode;
+use EasySwoole\FastCache\Protocol\PacketCodec;
+use EasySwoole\FastCache\Server\CacheProcess;
 use InvalidArgumentException;
 use RuntimeException;
 use Swoole\Coroutine;
-use Swoole\Coroutine\Client as CoroutineClient;
 use Swoole\Process;
 use Swoole\Server;
 
@@ -16,6 +20,7 @@ final class FastCache
 {
     private string $socketPath;
     private Config $config;
+    private UnixClient $client;
 
     public function __construct(?Config $config = null)
     {
@@ -36,6 +41,7 @@ final class FastCache
         $this->validateMemoryLimit($this->config->maxMemLimit);
 
         $this->socketPath = rtrim($tempDir, '/') . "/{$serverName}.fastCache.sock";
+        $this->client = new UnixClient($this->socketPath);
     }
 
     private function validateMemoryLimit(string $limit): void
@@ -64,7 +70,7 @@ final class FastCache
         );
     }
 
-    protected function createProcess(): Process
+    private function createProcess(): Process
     {
         $config = new UnixProcessConfig();
         $config->setProcessName($this->config->serverName . '-FastCache');
@@ -85,9 +91,17 @@ final class FastCache
         }
     }
 
-    public function set(string $key, mixed $value, ?float $timeout = null): bool
-    {
-        return $this->request(OpCode::SET, $key, $timeout, $value);
+    public function set(
+        string $key,
+        mixed $value,
+        ?int $ttl = null,
+        ?float $timeout = null,
+    ): bool {
+        if ($ttl !== null && $ttl <= 0) {
+            throw new InvalidArgumentException('FastCache TTL must be a positive integer');
+        }
+
+        return $this->request(OpCode::SET, $key, $timeout, [$value, $ttl]);
     }
 
     public function get(string $key, ?float $timeout = null): mixed
@@ -137,6 +151,11 @@ final class FastCache
         return $this->request(OpCode::INIT_QUEUE, $queueName, $timeout, $queueCapacity);
     }
 
+    public function delQueue(string $queueName, ?float $timeout = null): bool
+    {
+        return $this->request(OpCode::DEL_QUEUE, $queueName, $timeout);
+    }
+
     public function hasInitQueue(string $queueName, ?float $timeout = null): bool
     {
         return $this->request(OpCode::HAS_INIT_QUEUE, $queueName, $timeout);
@@ -163,12 +182,12 @@ final class FastCache
             throw new InvalidArgumentException('FastCache timeout must be finite and positive');
         }
 
-        $endLine = Protocol::now() + $timeout;
+        $endLine = hrtime(true) / 1_000_000_000 + $timeout;
 
-        $packet = Protocol::encode((new Command($operation, $key, $endLine, $data))->toArray());
-        $response = $this->exchange($packet, $endLine);
+        $packet = PacketCodec::encodeRequest(new Command($operation, $key, $endLine, $data));
+        $response = $this->client->exchange($packet, $endLine);
 
-        $message = Protocol::decode($response);
+        $message = PacketCodec::decode($response);
         if (!array_is_list($message) || count($message) !== 2 || !is_bool($message[0])) {
             throw new RuntimeException('Invalid FastCache response');
         }
@@ -179,49 +198,5 @@ final class FastCache
         }
 
         return $value;
-    }
-
-    private function exchange(string $packet, float $endLine): string
-    {
-        $client = new CoroutineClient(SWOOLE_UNIX_STREAM);
-        $client->set([
-            'open_length_check' => true,
-            'package_length_type' => 'N',
-            'package_length_offset' => 0,
-            'package_body_offset' => 4,
-            'package_max_length' => Protocol::MAX_PACKET_SIZE,
-        ]);
-
-        if (!$client->connect($this->socketPath, 0, $this->remaining($endLine))) {
-            throw new RuntimeException("Could not connect to FastCache (error {$client->errCode})");
-        }
-
-        try {
-            $sent = $client->exportSocket()->sendAll($packet, $this->remaining($endLine));
-            if ($sent !== strlen($packet)) {
-                throw new RuntimeException("Could not send FastCache request (error {$client->errCode})");
-            }
-
-            $response = $client->recv($this->remaining($endLine));
-            if (!$response) {
-                throw new RuntimeException("Could not receive FastCache response (error {$client->errCode})");
-            }
-
-            return substr($response, 4);
-        } finally {
-            if ($client->isConnected()) {
-                $client->close();
-            }
-        }
-    }
-
-    private function remaining(float $endLine): float
-    {
-        $remaining = $endLine - Protocol::now();
-        if ($remaining <= 0) {
-            throw new RuntimeException('FastCache request timed out');
-        }
-
-        return $remaining;
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\FastCache;
+namespace EasySwoole\FastCache\Protocol;
 
 enum OpCode: string
 {
@@ -14,6 +14,7 @@ enum OpCode: string
     case HDEL = 'hdel';
     case HSCAN = 'hscan';
     case INIT_QUEUE = 'initQueue';
+    case DEL_QUEUE = 'delQueue';
     case HAS_INIT_QUEUE = 'hasInitQueue';
     case PUSH = 'push';
     case POP = 'pop';

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\FastCache;
+namespace EasySwoole\FastCache\Protocol;
 
 use RuntimeException;
 
@@ -25,7 +25,7 @@ final class Command
         $endLine = $message['endLine'] ?? null;
         if (count($message) !== 4 || !is_string($message['op'] ?? null)
             || !is_string($message['key'] ?? null) || !array_key_exists('data', $message)
-            || (!is_float($endLine) && !is_int($endLine))
+            || !is_float($endLine)
         ) {
             throw new RuntimeException('Invalid FastCache command');
         }

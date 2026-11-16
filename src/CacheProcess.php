@@ -138,7 +138,6 @@ final class CacheProcess extends AbstractUnixProcess
 
     private function set(string $key, mixed $value): bool
     {
-        $this->del($key);
         $this->values[$key] = $value;
 
         return true;
@@ -146,10 +145,6 @@ final class CacheProcess extends AbstractUnixProcess
 
     private function get(string $key): mixed
     {
-        if (isset($this->hashes[$key])) {
-            throw new RuntimeException('FastCache key contains a hash');
-        }
-
         return $this->values[$key] ?? null;
     }
 
@@ -167,10 +162,6 @@ final class CacheProcess extends AbstractUnixProcess
 
     private function hset(string $key, string $field, mixed $value): bool
     {
-        if (array_key_exists($key, $this->values) || isset($this->queues[$key])) {
-            throw new RuntimeException('FastCache key does not contain a hash');
-        }
-
         if (!isset($this->hashes[$key])) {
             $this->hashes[$key] = ['id' => bin2hex(random_bytes(16)), 'fields' => [], 'values' => []];
         }

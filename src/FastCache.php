@@ -33,7 +33,35 @@ final class FastCache
             throw new InvalidArgumentException('FastCache timeout must be finite and positive');
         }
 
+        $this->validateMemoryLimit($this->config->maxMemLimit);
+
         $this->socketPath = rtrim($tempDir, '/') . "/{$serverName}.fastCache.sock";
+    }
+
+    private function validateMemoryLimit(string $limit): void
+    {
+        if ($limit === '-1') {
+            return;
+        }
+
+        if (preg_match('/\A([1-9][0-9]*)([KMG]?)\z/i', $limit, $parts)) {
+            $multiplier = match (strtoupper($parts[2])) {
+                'K' => 1024,
+                'M' => 1024 * 1024,
+                'G' => 1024 * 1024 * 1024,
+                '' => 1,
+            };
+
+            if (filter_var($parts[1], FILTER_VALIDATE_INT, [
+                'options' => ['max_range' => intdiv(PHP_INT_MAX, $multiplier)],
+            ]) !== false) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException(
+            'FastCache maxMemLimit must be a positive byte count, a size such as 512M, or -1'
+        );
     }
 
     protected function createProcess(): Process
@@ -121,6 +149,10 @@ final class FastCache
 
     private function request(OpCode $operation, string $key, ?float $timeout, mixed $data = null): mixed
     {
+        if (Coroutine::getCid() < 0) {
+            throw new RuntimeException('FastCache operations require a Swoole coroutine');
+        }
+
         $timeout ??= $this->config->timeout;
         if (!is_finite($timeout) || $timeout <= 0) {
             throw new InvalidArgumentException('FastCache timeout must be finite and positive');
@@ -129,9 +161,7 @@ final class FastCache
         $endLine = Protocol::now() + $timeout;
 
         $packet = Protocol::encode((new Command($operation, $key, $endLine, $data))->toArray());
-        $response = Coroutine::getCid() >= 0
-            ? $this->exchangeCoroutine($packet, $endLine)
-            : $this->exchangeSync($packet, $endLine);
+        $response = $this->exchange($packet, $endLine);
 
         $message = Protocol::decode($response);
         if (!array_is_list($message) || count($message) !== 2 || !is_bool($message[0])) {
@@ -146,7 +176,7 @@ final class FastCache
         return $value;
     }
 
-    private function exchangeCoroutine(string $packet, float $endLine): string
+    private function exchange(string $packet, float $endLine): string
     {
         $client = new CoroutineClient(SWOOLE_UNIX_STREAM);
         $client->set([
@@ -180,35 +210,6 @@ final class FastCache
         }
     }
 
-    private function exchangeSync(string $packet, float $endLine): string
-    {
-        $stream = stream_socket_client('unix://' . $this->socketPath, $errorCode, $errorMessage, $this->remaining($endLine));
-        if ($stream === false) {
-            throw new RuntimeException("Could not connect to FastCache (error {$errorCode}: {$errorMessage})");
-        }
-
-        try {
-            for ($offset = 0, $length = strlen($packet); $offset < $length; $offset += $sent) {
-                $this->setStreamTimeout($stream, $this->remaining($endLine));
-                $sent = fwrite($stream, substr($packet, $offset));
-                if (!$sent) {
-                    throw new RuntimeException('Could not send FastCache request');
-                }
-            }
-
-            $header = $this->readStream($stream, 4, $endLine);
-
-            $size = unpack('Nsize', $header)['size'];
-            if ($size === 0 || $size + 4 > Protocol::MAX_PACKET_SIZE) {
-                throw new RuntimeException('Invalid FastCache response size');
-            }
-
-            return $this->readStream($stream, $size, $endLine);
-        } finally {
-            fclose($stream);
-        }
-    }
-
     private function remaining(float $endLine): float
     {
         $remaining = $endLine - Protocol::now();
@@ -217,30 +218,5 @@ final class FastCache
         }
 
         return $remaining;
-    }
-
-    /** @param resource $stream */
-    private function readStream($stream, int $size, float $endLine): string
-    {
-        $data = '';
-        while (strlen($data) < $size) {
-            $this->setStreamTimeout($stream, $this->remaining($endLine));
-            $chunk = fread($stream, $size - strlen($data));
-            if ($chunk === false || $chunk === '') {
-                throw new RuntimeException('Could not receive FastCache response');
-            }
-
-            $data .= $chunk;
-        }
-
-        return $data;
-    }
-
-    /** @param resource $stream */
-    private function setStreamTimeout($stream, float $timeout): void
-    {
-        $seconds = (int) min(floor($timeout), PHP_INT_MAX >> 1);
-        $microseconds = (int) ceil(($timeout - floor($timeout)) * 1_000_000);
-        stream_set_timeout($stream, $seconds, max($seconds === 0 ? 1 : 0, $microseconds));
     }
 }

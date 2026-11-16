@@ -104,7 +104,7 @@ final class CacheProcess extends AbstractUnixProcess
         $validData = match ($operation) {
             OpCode::GET, OpCode::DEL, OpCode::POP, OpCode::HAS_INIT_QUEUE => $data === null,
             OpCode::SET, OpCode::PUSH => true,
-            OpCode::HGET => is_string($data),
+            OpCode::HGET, OpCode::HDEL => is_string($data),
             OpCode::HSCAN => is_array($data) && array_is_list($data) && count($data) === 2
                 && ($data[0] === null || is_string($data[0])) && is_int($data[1]) && $data[1] > 0,
             OpCode::INIT_QUEUE => is_int($data) && $data > 0,
@@ -128,6 +128,7 @@ final class CacheProcess extends AbstractUnixProcess
             OpCode::DEL => $this->del($key),
             OpCode::HSET => $this->hset($key, $data[0], $data[1]),
             OpCode::HGET => $this->hget($key, $data),
+            OpCode::HDEL => $this->hdel($key, $data),
             OpCode::HSCAN => $this->hscan($key, $data[0], $data[1]),
             OpCode::INIT_QUEUE => $this->initQueue($key, $data),
             OpCode::HAS_INIT_QUEUE => isset($this->queues[$key]),
@@ -178,6 +179,28 @@ final class CacheProcess extends AbstractUnixProcess
     private function hget(string $key, string $field): mixed
     {
         return $this->hashes[$key]['values'][$field] ?? null;
+    }
+
+    private function hdel(string $key, string $field): bool
+    {
+        if (!isset($this->hashes[$key]) || !array_key_exists($field, $this->hashes[$key]['values'])) {
+            return false;
+        }
+
+        $hash = &$this->hashes[$key];
+        if (count($hash['fields']) === 1) {
+            unset($this->hashes[$key]);
+
+            return true;
+        }
+
+        $id = bin2hex(random_bytes(16));
+        $position = array_search($field, $hash['fields'], true);
+        array_splice($hash['fields'], $position, 1);
+        unset($hash['values'][$field]);
+        $hash['id'] = $id;
+
+        return true;
     }
 
     private function hscan(string $key, ?string $cursor, int $count): array

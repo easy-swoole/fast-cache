@@ -47,6 +47,7 @@ $server->start();
 | `del($key)` | 删除指定 key 下的普通值、哈希和队列，存在任一项时返回 `true`。 |
 | `hset($key, $field, $value)` | 创建哈希或写入字段，成功返回 `true`。 |
 | `hget($key, $field)` | 读取单个哈希字段，键或字段不存在时返回 `null`。 |
+| `hdel($key, $field)` | 删除单个哈希字段，成功返回 `true`，键或字段不存在时返回 `false`。删除最后一个字段时移除该哈希。 |
 | `hscan($key, $cursor = null, $count = 100)` | 按字段插入顺序分页读取哈希，返回 `cursor` 和 `items`。 |
 | `initQueue($queueName, $queueCapacity = 1024 * 512)` | 创建指定容量的队列。创建成功返回 `true`，队列已存在时关闭原 Channel 并创建新队列，原有数据丢弃。 |
 | `hasInitQueue($queueName)` | 队列已存在时返回 `true`。 |
@@ -63,4 +64,4 @@ $server->start();
 
 首次调用 `hscan()` 时省略游标，之后把上一页返回的 `cursor` 传给下一次调用。`cursor` 为 `null` 时扫描结束。`items` 是由 `['field' => $field, 'value' => $value]` 组成的列表。哈希不存在时，首次调用返回空列表。
 
-`count` 是单页字段数的上限。响应接近 8 MiB 时会提前分页，单个字段及其值超过单页容量时会抛出异常。更新字段保留插入位置，扫描读取各页生成时的值。删除哈希后，旧游标会失效，即使随后用同一个键重建哈希。
+`count` 是单页字段数的上限。响应接近 8 MiB 时会提前分页，单个字段及其值超过单页容量时会抛出异常。更新字段保留插入位置，扫描读取各页生成时的值。删除哈希或其中任一字段后，旧游标会失效，即使随后用同一个键重建哈希。

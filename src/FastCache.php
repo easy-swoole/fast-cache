@@ -110,6 +110,11 @@ final class FastCache
         return $this->request(OpCode::HGET, $key, $timeout, $field);
     }
 
+    public function hdel(string $key, string $field, ?float $timeout = null): bool
+    {
+        return $this->request(OpCode::HDEL, $key, $timeout, $field);
+    }
+
     public function hscan(
         string $key,
         ?string $cursor = null,

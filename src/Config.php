@@ -12,6 +12,8 @@ class Config extends SplBean
 
     public float $timeout = 1.0;
 
+    public string $maxMemLimit = '512M';
+
     protected function initialize(): void
     {
         if ($this->tempDir === null || $this->tempDir === '') {

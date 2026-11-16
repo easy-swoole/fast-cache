@@ -43,7 +43,11 @@ final class FastCache
         $config->setSocketFile($this->socketPath);
         $config->setPipeType(UnixProcessConfig::PIPE_TYPE_NONE);
 
-        return (new CacheProcess($config, $this->config->timeout))->getProcess();
+        return (new CacheProcess(
+            $config,
+            $this->config->timeout,
+            $this->config->maxMemLimit,
+        ))->getProcess();
     }
 
     public function attachToServer(Server $server): void

@@ -22,12 +22,17 @@ final class CacheProcess extends AbstractUnixProcess
     public function __construct(
         UnixProcessConfig $config,
         private float $timeout,
+        private string $maxMemLimit,
     ) {
         parent::__construct($config);
     }
 
     public function run($arg): void
     {
+        if (ini_set('memory_limit', $this->maxMemLimit) === false) {
+            throw new RuntimeException("Could not set FastCache memory_limit to {$this->maxMemLimit}");
+        }
+
         $socketPath = $this->getConfig()->getSocketFile();
         if (is_link($socketPath) || (file_exists($socketPath) && filetype($socketPath) !== 'socket')) {
             throw new RuntimeException("FastCache socket path is occupied by a non-socket file: {$socketPath}");

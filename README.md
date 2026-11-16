@@ -34,6 +34,7 @@ $server->start();
 | `serverName` | `EasySwoole` | 区分服务实例，用于进程名和 Socket 文件名。 |
 | `tempDir` | `sys_get_temp_dir()` | Socket 所在的绝对目录，须已存在且应用可写。Socket 文件名为 `{serverName}.fastCache.sock`。 |
 | `timeout` | `1.0` | Socket 连接和读写超时，单位为秒，须为有限正数。 |
+| `maxMemLimit` | `512M` | 缓存子进程的 PHP `memory_limit`，使用 PHP INI 支持的格式。 |
 
 `FastCache` 在构造时读取配置。可以通过 `new Config([...])` 或在构造 `FastCache` 之前设置配置属性。
 

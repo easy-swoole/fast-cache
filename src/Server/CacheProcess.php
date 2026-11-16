@@ -22,6 +22,8 @@ final class CacheProcess extends AbstractUnixProcess
     private ValueStore $values;
     private QueueStore $queues;
     private CommandHandler $handler;
+    /** @var array<int, Socket> */
+    private array $connections = [];
 
     public function __construct(
         UnixProcessConfig $config,
@@ -67,13 +69,26 @@ final class CacheProcess extends AbstractUnixProcess
             parent::onShutDown();
         }
         $this->queues->closeAll();
+
+        $connections = $this->connections;
+        $this->connections = [];
+        foreach ($connections as $connection) {
+            $connection->close();
+        }
     }
 
     public function onAccept(Socket $socket): void
     {
+        if ($this->isShutDown) {
+            $socket->close();
+            return;
+        }
+
+        $connectionId = spl_object_id($socket);
+        $this->connections[$connectionId] = $socket;
         try {
             $request = PacketReader::readRequest($socket, hrtime(true) / 1_000_000_000 + $this->timeout);
-            if ($request === null) {
+            if ($request === null || $this->isShutDown) {
                 return;
             }
 
@@ -88,11 +103,14 @@ final class CacheProcess extends AbstractUnixProcess
             }
 
             $sendTimeout = $endLine - hrtime(true) / 1_000_000_000;
-            if ($sendTimeout > 0) {
+            if (!$this->isShutDown && $sendTimeout > 0) {
                 $socket->sendAll($response, $sendTimeout);
             }
         } finally {
-            $socket->close();
+            if (isset($this->connections[$connectionId])) {
+                unset($this->connections[$connectionId]);
+                $socket->close();
+            }
         }
     }
 

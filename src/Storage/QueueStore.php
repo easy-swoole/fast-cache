@@ -32,7 +32,9 @@ final class QueueStore
 
     public function closeAll(): void
     {
-        foreach ($this->queues as $queue) {
+        $queues = $this->queues;
+        $this->queues = [];
+        foreach ($queues as $queue) {
             $queue->close();
         }
     }

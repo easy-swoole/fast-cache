@@ -1,7 +1,7 @@
 {
     "name": "easyswoole/fast-cache",
     "type": "library",
-    "description": "An efficient swoole framework",
+    "description": "In-memory cache and queues shared over a Unix socket",
     "keywords": [
         "swoole",
         "framework",
@@ -18,21 +18,13 @@
     ],
     "require": {
         "php": ">=8.1.0",
-        "easyswoole/component": "^2.0",
+        "ext-swoole": ">=5.0",
+        "easyswoole/component": "^2.5.7",
         "easyswoole/spl": "^2.0"
-    },
-    "require-dev": {
-        "easyswoole/phpunit": "^1.0",
-        "easyswoole/swoole-ide-helper": "^1.2"
     },
     "autoload": {
         "psr-4": {
             "EasySwoole\\FastCache\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "EasySwoole\\FastCache\\Tests\\": "tests/"
         }
     }
 }

@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace EasySwoole\FastCache;
+
+enum OpCode: string
+{
+    case SET = 'set';
+    case GET = 'get';
+    case DEL = 'del';
+    case HSET = 'hset';
+    case HGET = 'hget';
+    case INIT_QUEUE = 'initQueue';
+    case HAS_INIT_QUEUE = 'hasInitQueue';
+    case PUSH = 'push';
+    case POP = 'pop';
+}

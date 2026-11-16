@@ -16,7 +16,7 @@ use Swoole\Coroutine;
 use Swoole\Process;
 use Swoole\Server;
 
-final class FastCache
+class FastCache
 {
     private string $socketPath;
     private Config $config;

@@ -78,6 +78,19 @@ final class FastCache
         return $this->request(OpCode::HGET, $key, $timeout, $field);
     }
 
+    public function hscan(
+        string $key,
+        ?string $cursor = null,
+        int $count = 100,
+        ?float $timeout = null,
+    ): array {
+        if ($count < 1) {
+            throw new InvalidArgumentException('FastCache hscan count must be positive');
+        }
+
+        return $this->request(OpCode::HSCAN, $key, $timeout, [$cursor, $count]);
+    }
+
     public function initQueue(string $queueName, int $queueCapacity = 1024 * 512, ?float $timeout = null): bool
     {
         if ($queueCapacity < 1) {
@@ -110,15 +123,11 @@ final class FastCache
         }
 
         $endLine = Protocol::now() + $timeout;
-        $receiveEndLine = $endLine;
-        if ($operation === OpCode::PUSH || $operation === OpCode::POP) {
-            $receiveEndLine += 2 * Protocol::QUEUE_TIMEOUT_GRACE;
-        }
 
         $packet = Protocol::encode((new Command($operation, $key, $endLine, $data))->toArray());
         $response = Coroutine::getCid() >= 0
-            ? $this->exchangeCoroutine($packet, $endLine, $receiveEndLine)
-            : $this->exchangeSync($packet, $endLine, $receiveEndLine);
+            ? $this->exchangeCoroutine($packet, $endLine)
+            : $this->exchangeSync($packet, $endLine);
 
         $message = Protocol::decode($response);
         if (!array_is_list($message) || count($message) !== 2 || !is_bool($message[0])) {
@@ -133,7 +142,7 @@ final class FastCache
         return $value;
     }
 
-    private function exchangeCoroutine(string $packet, float $endLine, float $receiveEndLine): string
+    private function exchangeCoroutine(string $packet, float $endLine): string
     {
         $client = new CoroutineClient(SWOOLE_UNIX_STREAM);
         $client->set([
@@ -154,7 +163,7 @@ final class FastCache
                 throw new RuntimeException("Could not send FastCache request (error {$client->errCode})");
             }
 
-            $response = $client->recv($this->remaining($receiveEndLine));
+            $response = $client->recv($this->remaining($endLine));
             if (!$response) {
                 throw new RuntimeException("Could not receive FastCache response (error {$client->errCode})");
             }
@@ -167,7 +176,7 @@ final class FastCache
         }
     }
 
-    private function exchangeSync(string $packet, float $endLine, float $receiveEndLine): string
+    private function exchangeSync(string $packet, float $endLine): string
     {
         $stream = stream_socket_client('unix://' . $this->socketPath, $errorCode, $errorMessage, $this->remaining($endLine));
         if ($stream === false) {
@@ -183,14 +192,14 @@ final class FastCache
                 }
             }
 
-            $header = $this->readStream($stream, 4, $receiveEndLine);
+            $header = $this->readStream($stream, 4, $endLine);
 
             $size = unpack('Nsize', $header)['size'];
             if ($size === 0 || $size + 4 > Protocol::MAX_PACKET_SIZE) {
                 throw new RuntimeException('Invalid FastCache response size');
             }
 
-            return $this->readStream($stream, $size, $receiveEndLine);
+            return $this->readStream($stream, $size, $endLine);
         } finally {
             fclose($stream);
         }

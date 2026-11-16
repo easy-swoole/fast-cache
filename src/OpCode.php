@@ -11,6 +11,7 @@ enum OpCode: string
     case DEL = 'del';
     case HSET = 'hset';
     case HGET = 'hget';
+    case HSCAN = 'hscan';
     case INIT_QUEUE = 'initQueue';
     case HAS_INIT_QUEUE = 'hasInitQueue';
     case PUSH = 'push';

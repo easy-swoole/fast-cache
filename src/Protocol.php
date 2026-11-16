@@ -9,7 +9,7 @@ use RuntimeException;
 /** @internal */
 final class Protocol
 {
-    public const QUEUE_TIMEOUT_GRACE = 0.1;
+    public const QUEUE_RESPONSE_MARGIN = 0.1;
 
     public const MAX_PACKET_SIZE = 8 * 1024 * 1024;
 
@@ -28,6 +28,11 @@ final class Protocol
         }
 
         return pack('N', $size) . $body;
+    }
+
+    public static function packetSize(array $message): int
+    {
+        return 4 + strlen(serialize($message));
     }
 
     public static function decode(string $body): array
